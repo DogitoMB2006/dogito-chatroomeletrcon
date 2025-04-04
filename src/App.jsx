@@ -190,7 +190,7 @@ function ElectronFeatures() {
     if (window.electronAPI.isDev) {
       logger.log('Información de la aplicación Electron:', window.electronAPI.getAppInfo());
     }
-
+//toast.success
     // Configurar evento para manejar clics en notificaciones
     window.electronAPI.onNotificationClick((_, payload) => {
       // Aquí puedes manejar lo que ocurre cuando se hace clic en una notificación
@@ -222,15 +222,25 @@ function ElectronFeatures() {
       setUpdateDownloaded(true);
       setUpdateInfo(info);
       toast.success(
-        <div>
-          <p>Actualización lista para instalar.</p>
-          <button 
-            onClick={() => window.electronAPI.updates.installUpdate()}
-            className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Instalar ahora
-          </button>
-        </div>,
+        <div className="fixed bottom-4 right-4 z-50 bg-indigo-700 text-white p-4 rounded-lg shadow-lg max-w-sm">
+        {updateDownloaded ? (
+          <>
+            <h3 className="font-bold">¡Actualización lista!</h3>
+            <p className="mb-3">La versión {updateInfo?.version} está lista para instalar.</p>
+            <button 
+              onClick={() => window.electronAPI.updates.installUpdate()}
+              className="px-4 py-2 bg-white text-indigo-700 rounded hover:bg-gray-100"
+            >
+              Instalar y reiniciar
+            </button>
+          </>
+        ) : (
+          <>
+            <h3 className="font-bold">Nueva versión disponible</h3>
+            <p>La versión {updateInfo?.version} se está descargando...</p>
+          </>
+        )}
+      </div>,
         {
           autoClose: false,
           closeOnClick: false
