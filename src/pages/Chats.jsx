@@ -68,7 +68,7 @@ export default function Chats() {
       clickedItemRef.current.classList.add('bg-indigo-700');
     }
     
-    // Ejecutar la navegación con un pequeño retraso para la transición visual
+    // Ejecutar la navegación con un pequeño retraso para la transición visua
     clearTimeout(navigationTimeoutRef.current);
     navigationTimeoutRef.current = setTimeout(() => {
       navigate(path);
