@@ -1,0 +1,123 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+bower_components/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Electron build and release directories
+/release
+/out
+/dist
+/*.exe
+*.asar
+
+# Specific large build files to ignore
+release/
+release/win-unpacked/
+release/Dogito\ Chat\ Setup\ *
+release/win-unpacked/Dogito\ Chat.exe
+release/win-unpacked/resources/app.asar
+
+# Vite build output
+/dist
+/dist-ssr
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backup files
+*.bak
+*.gho
+*.ori
+*.orig
+*.tmp
+
+# Temporary files
+tmp/
+temp/
+
+# Electron cache
+.electron-cache/
+
+# Firebase cache and local configuration
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Compiled TypeScript files
+*.tsbuildinfo
+*.tsbuildinfo.*
+
+# Test related files
+/coverage
+*.lcov
+
+# Personal workspace/configuration
+.workspace
+.project
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backup files
+*.bak
+*.gho
+*.ori
+*.orig
+*.tmp
+
+# Temporary files
+tmp/
+temp/
+
+# Electron cache
+.electron-cache/
+
+# Firebase cache and local configuration
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Compiled TypeScript files
+*.tsbuildinfo
+*.tsbuildinfo.*
+
+# Test related files
+/coverage
+*.lcov
+
+# Personal workspace/configuration
+.workspace
+.project
