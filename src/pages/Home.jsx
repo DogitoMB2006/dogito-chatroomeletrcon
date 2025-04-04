@@ -8,7 +8,7 @@ export default function Home() {
     {
       id: 1,
       version: "v1.0.3",
-      date: "4 Abril, 2025",
+      date: "3 Abril, 2025",
       title: "Que hay de nuevo?",
       description: "ahora pueden habilitar las notificaciones!!!",
       features: [
