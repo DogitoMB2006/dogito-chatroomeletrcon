@@ -217,7 +217,7 @@ function ElectronFeatures() {
         autoClose: 5000
       });
     });
-
+//ElectronFeatures
     window.electronAPI.updates.onUpdateDownloaded((_, info) => {
       setUpdateDownloaded(true);
       setUpdateInfo(info);
@@ -377,6 +377,12 @@ export default function App() {
     if (isElectron) {
       const appInfo = window.electronAPI.getAppInfo();
       logger.log(`Dogito Chat versión ${appInfo.appVersion}`);
+      window.electronAPI.onManualCheckForUpdates(() => {
+        toast.info("Buscando actualizaciones...", {
+          autoClose: 3000
+        });
+      });
+      
     }
   }, []);
 
