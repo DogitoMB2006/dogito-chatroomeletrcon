@@ -63,6 +63,14 @@
       "buildResources": "public",
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "DogitoMB2006",
+        "repo": "dogito-chatroomeletrcon",
+        "releaseType": "release"
+      }
+    ],
     "win": {
       "target": [
         "nsis"
