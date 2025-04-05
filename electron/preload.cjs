@@ -1,98 +1,144 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const path = require('path');
 
-// Almacenar rutas de navegación para notificaciones
-let pendingNavigationRoutes = {};
+console.log("🟢 Preload script ejecutado correctamente");
 
-// Exponer APIs protegidas al proceso de renderizado
+// Función para verificar que estamos ejecutando en Electron
+function isElectron() {
+  return window && window.process && window.process.type;
+}
+
+// API segura para exponer a la ventana del navegador
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Enviar una notificación nativa
-  sendNotification: (title, body) => {
-    ipcRenderer.send('notification', { title, body });
-  },
-
-  // Activar apertura de la app cuando se hace clic en una notificación
-  onNotificationClick: (callback) => {
-    ipcRenderer.on('notification-clicked', (event) => {
-      callback(event, pendingNavigationRoutes);
-      pendingNavigationRoutes = {};
-    });
-  },
-
-  // Navegar a una ruta específica
-  navigateTo: (route) => {
-    pendingNavigationRoutes = { route };
-    ipcRenderer.send('navigate-to', route);
-  },
-
-  // Informar sobre cambios en el estado de la conexión
-  setOnlineStatus: (status) => {
-    ipcRenderer.send('online-status-changed', status);
-  },
-
-  // Verificar si la app se está ejecutando en modo de desarrollo
-  isDev: process.env.NODE_ENV === 'development',
-
-  // Obtener información del sistema
-  getAppInfo: () => {
-    return {
-      appName: 'Dogito Chat',
-      appVersion: process.env.npm_package_version,
-      electronVersion: process.versions.electron,
-      chromeVersion: process.versions.chrome,
-      nodeVersion: process.versions.node,
-      platform: process.platform
-    };
-  },
-
-  // Funciones relacionadas con actualizaciones
-  updates: {
-    onUpdateAvailable: (callback) => {
-      ipcRenderer.on('update-available', callback);
+  // Notificaciones
+  notifications: {
+    send: (title, body) => {
+      if (isElectron()) {
+        ipcRenderer.send('notification', { title, body });
+      } else {
+        console.warn('Función de notificación no disponible fuera de Electron');
+      }
     },
-    onUpdateDownloaded: (callback) => {
-      ipcRenderer.on('update-downloaded', callback);
-    },
-    onUpdateError: (callback) => {
-      ipcRenderer.on('update-error', callback);
-    },
-  onUpdateNotAvailable: (callback) => {
-    ipcRenderer.on('update-not-available', callback);
-  },
-    installUpdate: () => {
-      ipcRenderer.send('install-update');
-    },
-    checkForUpdates: () => {
-      ipcRenderer.send('check-for-updates');
+    onClicked: (callback) => {
+      if (isElectron()) {
+        const handler = () => callback();
+        ipcRenderer.on('notification-clicked', handler);
+        return () => ipcRenderer.removeListener('notification-clicked', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
     }
   },
-
-  // Escuchar evento cuando el usuario da clic en "Ver actualizaciones" del menú
-  onManualCheckForUpdates: (callback) => {
-    ipcRenderer.on('checking-for-updates', callback);
+  
+  // Navegación
+  navigation: {
+    navigateTo: (route) => {
+      if (isElectron()) {
+        ipcRenderer.send('navigate-to', route);
+      } else {
+        console.warn('Función de navegación no disponible fuera de Electron');
+      }
+    },
+    onNavigateTo: (callback) => {
+      if (isElectron()) {
+        const handler = (_, route) => callback(route);
+        ipcRenderer.on('navigate-to-route', handler);
+        return () => ipcRenderer.removeListener('navigate-to-route', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    }
+  },
+  
+  // Información de la aplicación
+  app: {
+    getVersion: () => {
+      if (isElectron()) {
+        ipcRenderer.send('get-app-version');
+        return new Promise((resolve) => {
+          ipcRenderer.once('app-version', (_, version) => resolve(version));
+        });
+      } else {
+        return Promise.resolve('0.0.0-dev'); // Versión por defecto para desarrollo web
+      }
+    }
+  },
+  
+  // Sistema de actualizaciones
+  updates: {
+    // Acciones
+    checkForUpdates: () => {
+      if (isElectron()) {
+        ipcRenderer.send('check-for-updates');
+      } else {
+        console.warn('Función de actualización no disponible fuera de Electron');
+      }
+    },
+    installUpdate: () => {
+      if (isElectron()) {
+        ipcRenderer.send('install-update');
+      } else {
+        console.warn('Función de actualización no disponible fuera de Electron');
+      }
+    },
+    
+    // Eventos
+    onCheckingForUpdates: (callback) => {
+      if (isElectron()) {
+        const handler = () => callback();
+        ipcRenderer.on('checking-for-updates', handler);
+        return () => ipcRenderer.removeListener('checking-for-updates', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    },
+    onUpdateAvailable: (callback) => {
+      if (isElectron()) {
+        const handler = (_, info) => callback(info);
+        ipcRenderer.on('update-available', handler);
+        return () => ipcRenderer.removeListener('update-available', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    },
+    onUpdateNotAvailable: (callback) => {
+      if (isElectron()) {
+        const handler = () => callback();
+        ipcRenderer.on('update-not-available', handler);
+        return () => ipcRenderer.removeListener('update-not-available', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    },
+    onUpdateDownloaded: (callback) => {
+      if (isElectron()) {
+        const handler = (_, info) => callback(info);
+        ipcRenderer.on('update-downloaded', handler);
+        return () => ipcRenderer.removeListener('update-downloaded', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    },
+    onUpdateProgress: (callback) => {
+      if (isElectron()) {
+        const handler = (_, progressObj) => callback(progressObj);
+        ipcRenderer.on('update-progress', handler);
+        return () => ipcRenderer.removeListener('update-progress', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    },
+    onUpdateError: (callback) => {
+      if (isElectron()) {
+        const handler = (_, error) => callback(error);
+        ipcRenderer.on('update-error', handler);
+        return () => ipcRenderer.removeListener('update-error', handler);
+      }
+      return () => {}; // Función vacía para entornos no-Electron
+    }
   }
 });
 
-// Obtener información de versión desde el proceso principal
-ipcRenderer.send('get-app-version');
-ipcRenderer.on('app-version', (_, version) => {
-  if (window.electronAPI && window.electronAPI.getAppInfo) {
-    const appInfo = window.electronAPI.getAppInfo();
-    appInfo.appVersion = version;
-  }
-});
+// Informar al proceso principal sobre el estado de conexión
+if (isElectron()) {
+  window.addEventListener('online', () => {
+    ipcRenderer.send('online-status-changed', 'online');
+  });
 
-// Escuchar navegación desde el proceso principal
-ipcRenderer.on('navigate-to-route', (_, route) => {
-  document.dispatchEvent(new CustomEvent('electron-navigate', {
-    detail: { route }
-  }));
-});
-
-// Detectar cuando se activa "Ver actualizaciones" desde el menú
-ipcRenderer.on('checking-for-updates', () => {
-  document.dispatchEvent(new CustomEvent('electron-checking-updates'));
-});
-
-window.addEventListener('DOMContentLoaded', () => {
-  console.log('Preload script ha sido cargado');
-});
+  window.addEventListener('offline', () => {
+    ipcRenderer.send('online-status-changed', 'offline');
+  });
+}

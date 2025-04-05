@@ -12,7 +12,10 @@ package-lock.json
 /dist
 /*.exe
 *.asar
-
+# Script de publicación local
+publicar.bat
+publicar.bat.lnk
+deploy-electron.bat
 # Specific large build files to ignore
 release/
 release/win-unpacked/

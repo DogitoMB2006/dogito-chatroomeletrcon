@@ -3,8 +3,10 @@ const path = require('path');
 const { autoUpdater } = require('electron-updater');
 console.log("🟢 main.cjs cargado correctamente desde Electron");
 
-autoUpdater.logger = require('electron-log');
-autoUpdater.logger.transports.file.level = 'info';
+// Configuración mejorada de logger
+const log = require('electron-log');
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
 
 let mainWindow;
 let tray = null;
@@ -74,10 +76,7 @@ function createAppMenu() {
         {
           label: 'Ver actualizaciones',
           click: () => {
-            autoUpdater.checkForUpdatesAndNotify();
-            if (mainWindow) {
-              mainWindow.webContents.send('checking-for-updates');
-            }
+            checkForUpdates();
           }
         }
       ]
@@ -89,88 +88,185 @@ function createAppMenu() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '../public/favicon.ico');
-  tray = new Tray(iconPath);
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Abrir Dogito Chat',
-      click: () => {
-        if (mainWindow === null) {
-          createWindow();
-        } else {
-          mainWindow.show();
+  try {
+    // Intenta con varias rutas posibles para el icono
+    const possiblePaths = [
+      path.join(__dirname, '../public/favicon.ico'),
+      path.join(__dirname, '../public/raw.ico'),
+      path.join(__dirname, '../public/icon.ico'),
+      path.join(__dirname, '../public/icon.png'),
+      path.join(__dirname, 'public/favicon.ico'),
+      path.join(__dirname, 'public/raw.ico')
+    ];
+
+    let iconPath = null;
+    for (const p of possiblePaths) {
+      if (require('fs').existsSync(p)) {
+        iconPath = p;
+        console.log(`✅ Icono encontrado en: ${p}`);
+        break;
+      }
+    }
+
+    if (!iconPath) {
+      console.warn("⚠️ No se encontró ningún icono para la bandeja del sistema");
+      
+      // En modo desarrollo, podemos simplemente omitir la bandeja del sistema
+      if (isDev) {
+        console.log("🔵 Modo desarrollo: continuando sin bandeja del sistema");
+        return; // Salimos sin crear la bandeja
+      }
+      
+      // En producción, usamos un icono por defecto
+      const defaultIconPath = path.join(app.getAppPath(), 'resources', 'icon.png');
+      if (require('fs').existsSync(defaultIconPath)) {
+        iconPath = defaultIconPath;
+        console.log(`✅ Usando icono predeterminado: ${defaultIconPath}`);
+      } else {
+        console.error("❌ No se pudo encontrar ningún icono válido para la bandeja");
+        return; // Salimos sin crear la bandeja
+      }
+    }
+
+    // Crear la bandeja con el icono encontrado
+    tray = new Tray(iconPath);
+    
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Abrir Dogito Chat',
+        click: () => {
+          if (mainWindow === null) {
+            createWindow();
+          } else {
+            mainWindow.show();
+          }
+        }
+      },
+      {
+        label: `Versión ${appVersion}`,
+        enabled: false
+      },
+      { type: 'separator' },
+      {
+        label: 'Buscar actualizaciones',
+        click: () => {
+          checkForUpdates();
+        }
+      },
+      { type: 'separator' },
+      {
+        label: 'Salir',
+        click: () => {
+          app.isQuitting = true;
+          app.quit();
         }
       }
-    },
-    {
-      label: `Versión ${appVersion}`,
-      enabled: false
-    },
-    { type: 'separator' },
-    {
-      label: 'Buscar actualizaciones',
-      click: () => {
-        autoUpdater.checkForUpdatesAndNotify();
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Salir',
-      click: () => {
-        app.isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
+    ]);
 
-  tray.setToolTip(`Dogito Chat v${appVersion}`);
-  tray.setContextMenu(contextMenu);
+    tray.setToolTip(`Dogito Chat v${appVersion}`);
+    tray.setContextMenu(contextMenu);
 
-  tray.on('click', () => {
-    if (mainWindow === null) {
-      createWindow();
-    } else {
-      mainWindow.show();
+    tray.on('click', () => {
+      if (mainWindow === null) {
+        createWindow();
+      } else {
+        mainWindow.show();
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error al crear la bandeja del sistema:", error);
+    // Continuar sin la bandeja del sistema
+  }
+}
+
+// Función unificada para verificar actualizaciones
+function checkForUpdates() {
+  log.info("🔍 Verificando actualizaciones manualmente...");
+  try {
+    // Asegurarse de que la ventana exista antes de enviar un mensaje
+    if (mainWindow) {
+      mainWindow.webContents.send('checking-for-updates');
     }
-  });
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (error) {
+    log.error("❌ Error al iniciar verificación de actualizaciones:", error);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-error', { message: error.message });
+    }
+  }
 }
 
 function setupAutoUpdater() {
   if (isDev) {
     autoUpdater.autoDownload = false;
-    console.log("⚠️ Modo DEV: autoUpdater activado pero no descargará.");
+    log.info("⚠️ Modo DEV: autoUpdater activado pero no descargará.");
   } else {
-    console.log("✅ Modo PRODUCCIÓN: autoUpdater activado con descarga.");
+    log.info("✅ Modo PRODUCCIÓN: autoUpdater activado con descarga.");
+    // Verificar cada hora en producción
     setInterval(() => {
-      console.log("🔄 Verificando actualizaciones automáticamente...");
-      autoUpdater.checkForUpdatesAndNotify();
+      log.info("🔄 Verificando actualizaciones automáticamente...");
+      checkForUpdates();
     }, 60 * 60 * 1000);
 
-    autoUpdater.checkForUpdatesAndNotify();
+    // Verificar al iniciar
+    checkForUpdates();
   }
 
-  // Eventos
+  // Eventos de actualización
+  autoUpdater.on('checking-for-update', () => {
+    log.info("🔍 Verificando actualizaciones disponibles...");
+    if (mainWindow) {
+      mainWindow.webContents.send('checking-for-updates');
+    }
+  });
+
   autoUpdater.on('update-available', (info) => {
-    console.log("📦 Update available:", info);
-    mainWindow.webContents.send('update-available', info);
+    log.info("📦 Update available:", info);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-available', info);
+    }
   });
 
   autoUpdater.on('update-not-available', (info) => {
-    console.log("✅ No hay actualizaciones disponibles.");
-    mainWindow.webContents.send('update-not-available');
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    console.log("⬇️ Update descargada:", info);
-    mainWindow.webContents.send('update-downloaded', info);
+    log.info("✅ No hay actualizaciones disponibles.");
+    if (mainWindow) {
+      mainWindow.webContents.send('update-not-available');
+    }
   });
 
   autoUpdater.on('error', (err) => {
-    console.error("❌ Error al buscar actualizaciones:", err);
-    mainWindow.webContents.send('update-error', err);
+    log.error("❌ Error al buscar actualizaciones:", err);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-error', { message: err.message });
+    }
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    log.info(`⏳ Progreso de descarga: ${progressObj.percent.toFixed(2)}%`);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-progress', progressObj);
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info("⬇️ Update descargada:", info);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-downloaded', info);
+      
+      // Opcional: Mostrar diálogo nativo para preguntar al usuario
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Actualización disponible',
+        message: 'Se ha descargado una nueva versión. ¿Desea reiniciar para instalarla?',
+        buttons: ['Instalar ahora', 'Más tarde']
+      }).then(({ response }) => {
+        if (response === 0) {
+          autoUpdater.quitAndInstall(false, true);
+        }
+      });
+    }
   });
 }
-
 
 app.whenReady().then(() => {
   createWindow();
@@ -185,6 +281,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// IPC handlers
 ipcMain.on('notification', (_, { title, body }) => {
   const notification = new Notification({
     title,
@@ -217,10 +314,15 @@ ipcMain.on('get-app-version', (event) => {
   event.sender.send('app-version', app.getVersion());
 });
 
-ipcMain.on('online-status-changed', (_, status) => {
-  console.log('Estado de conexión:', status);
+ipcMain.on('check-for-updates', () => {
+  checkForUpdates();
 });
 
 ipcMain.on('install-update', () => {
+  log.info("🔄 Instalando actualización...");
   autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.on('online-status-changed', (_, status) => {
+  log.info('Estado de conexión:', status);
 });

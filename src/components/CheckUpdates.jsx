@@ -3,12 +3,19 @@ import { toast } from 'react-toastify';
 
 const CheckUpdates = () => {
   const [showModal, setShowModal] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState({
+    checking: false,
+    available: false,
+    downloaded: false,
+    progress: 0
+  });
 
   const handleOpen = () => setShowModal(true);
   const handleClose = () => setShowModal(false);
 
   const handleCheckUpdates = () => {
     setShowModal(false);
+    setUpdateStatus(prev => ({ ...prev, checking: true }));
     toast.info("Buscando actualizaciones...", { autoClose: 3000 });
 
     if (window.electronAPI?.updates?.checkForUpdates) {
@@ -16,27 +23,87 @@ const CheckUpdates = () => {
     }
   };
 
-  // ✅ Escuchar eventos desde Electron
-  useEffect(() => {
-    if (window.electronAPI?.updates) {
-      window.electronAPI.updates.onUpdateAvailable(() => {
-        toast.success("¡Hay una nueva actualización disponible!");
-      });
-
-      window.electronAPI.updates.onUpdateDownloaded(() => {
-        toast.success("Actualización descargada. Puedes instalarla ahora.");
-      });
-
-      window.electronAPI.updates.onUpdateError(() => {
-        toast.error("Ocurrió un error al buscar actualizaciones.");
-      });
-
-      window.electronAPI.updates.onUpdateAvailable(() => {
-        console.log("📦 Evento recibido: update-available");
-        toast.success("¡Hay una nueva actualización disponible!");
-      });
-      
+  const handleInstallUpdate = () => {
+    if (window.electronAPI?.updates?.installUpdate) {
+      window.electronAPI.updates.installUpdate();
+      toast.info("Instalando actualización. La aplicación se reiniciará pronto...");
     }
+  };
+
+  // Escuchar eventos desde Electron
+  useEffect(() => {
+    if (!window.electronAPI?.updates) {
+      console.warn("API de actualización no disponible");
+      return;
+    }
+    
+    // Evento: Verificando actualizaciones
+    window.electronAPI.updates.onCheckingForUpdates(() => {
+      console.log("🔍 Verificando actualizaciones...");
+      setUpdateStatus(prev => ({ ...prev, checking: true }));
+    });
+
+    // Evento: Actualización disponible
+    window.electronAPI.updates.onUpdateAvailable((info) => {
+      console.log("📦 Actualización disponible:", info);
+      setUpdateStatus(prev => ({ 
+        ...prev, 
+        checking: false,
+        available: true 
+      }));
+      toast.success("¡Hay una nueva actualización disponible!");
+    });
+
+    // Evento: No hay actualizaciones
+    window.electronAPI.updates.onUpdateNotAvailable(() => {
+      console.log("✅ No hay actualizaciones disponibles");
+      setUpdateStatus(prev => ({ 
+        ...prev, 
+        checking: false,
+        available: false 
+      }));
+      toast.info("Tu aplicación está actualizada");
+    });
+
+    // Evento: Progreso de descarga
+    window.electronAPI.updates.onUpdateProgress((progressObj) => {
+      console.log(`⏳ Progreso: ${progressObj.percent.toFixed(2)}%`);
+      setUpdateStatus(prev => ({ 
+        ...prev, 
+        progress: progressObj.percent 
+      }));
+    });
+
+    // Evento: Actualización descargada
+    window.electronAPI.updates.onUpdateDownloaded((info) => {
+      console.log("⬇️ Actualización descargada:", info);
+      setUpdateStatus(prev => ({ 
+        ...prev, 
+        checking: false,
+        downloaded: true 
+      }));
+      toast.success("Actualización descargada. Puedes instalarla ahora.", {
+        autoClose: false,
+        closeOnClick: false,
+        draggable: true,
+        onClick: () => handleInstallUpdate()
+      });
+    });
+
+    // Evento: Error de actualización
+    window.electronAPI.updates.onUpdateError((error) => {
+      console.error("❌ Error de actualización:", error);
+      setUpdateStatus(prev => ({ 
+        ...prev, 
+        checking: false 
+      }));
+      toast.error(`Error al buscar actualizaciones: ${error.message || 'Error desconocido'}`);
+    });
+
+    // Limpiar los listeners al desmontar
+    return () => {
+      // Aquí deberías desconectar los listeners si tu API lo permite
+    };
   }, []);
 
   return (
@@ -44,9 +111,19 @@ const CheckUpdates = () => {
       <button
         onClick={handleOpen}
         className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
+        disabled={updateStatus.checking}
       >
-        Verificar actualizaciones
+        {updateStatus.checking ? 'Verificando...' : 'Verificar actualizaciones'}
       </button>
+
+      {updateStatus.downloaded && (
+        <button
+          onClick={handleInstallUpdate}
+          className="ml-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
+        >
+          Instalar ahora
+        </button>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex justify-center items-center z-50">
@@ -63,8 +140,9 @@ const CheckUpdates = () => {
               <button
                 onClick={handleCheckUpdates}
                 className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                disabled={updateStatus.checking}
               >
-                Buscar ahora
+                {updateStatus.checking ? 'Buscando...' : 'Buscar ahora'}
               </button>
             </div>
           </div>
