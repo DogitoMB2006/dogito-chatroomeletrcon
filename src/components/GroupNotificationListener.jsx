@@ -1,4 +1,4 @@
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { db } from "../firebase/config";
 import {
@@ -20,6 +20,25 @@ export default function GroupNotificationListener() {
   const { showToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Referencia para la limpieza de event listeners
+  const notificationClickUnsubRef = useRef(null);
+
+  // Configurar un solo listener para eventos de clic en notificaciones
+  useEffect(() => {
+    if (isElectron) {
+      const unsubNotifClick = window.electronAPI.onNotificationClick(() => {
+        console.log("Notificación de grupo clickeada");
+        // La navegación específica se manejará en cada notificación individual
+      });
+      
+      notificationClickUnsubRef.current = unsubNotifClick;
+      
+      return () => {
+        if (unsubNotifClick) unsubNotifClick();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (!userData) return;
@@ -89,11 +108,18 @@ export default function GroupNotificationListener() {
               try {
                 // Si estamos en Electron, usar notificaciones nativas
                 if (isElectron) {
+                  console.log(`Enviando notificación de grupo: ${notificationTitle} - ${messageText}`);
+                  
+                  // Usar el método correcto para enviar notificaciones
                   window.electronAPI.sendNotification(notificationTitle, messageText);
                   
-                  // En Electron también podemos configurar la acción al hacer clic
+                  // Configurar navegación para esta notificación específica 
+                  const groupPathFinal = groupPath; // Capturar en closure
+                  
+                  // Registramos un nuevo handler específico para esta notificación
                   window.electronAPI.onNotificationClick(() => {
-                    navigate(`/chat/group/${groupId}`);
+                    console.log(`Navegando a grupo: ${groupPathFinal}`);
+                    navigate(groupPathFinal);
                   });
                 }
                 // Si no estamos en Electron, usar el sistema de notificaciones del navegador
@@ -152,6 +178,12 @@ export default function GroupNotificationListener() {
     return () => {
       unsubGroups();
       unsubMessageListeners.forEach((unsub) => unsub());
+      
+      // Limpiar el listener de notificaciones de Electron
+      if (notificationClickUnsubRef.current) {
+        notificationClickUnsubRef.current();
+        notificationClickUnsubRef.current = null;
+      }
     };
   }, [userData, showToast, location.pathname, navigate]); 
 

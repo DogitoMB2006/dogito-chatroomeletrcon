@@ -24,6 +24,30 @@ export default function NotificationListener() {
   const location = useLocation();
   const navigate = useNavigate();
   const [processedMsgIds] = useState(new Set()); 
+  
+  // Referencia para la limpieza de event listeners
+  const notificationClickUnsubRef = useRef(null);
+
+  useEffect(() => {
+    // Configurar el handler para notificaciones en Electron una sola vez
+    if (isElectron) {
+      // Registrar el listener para clicks en notificaciones
+      const unsubNotifClick = window.electronAPI.onNotificationClick(() => {
+        console.log("Notificación clickeada, restaurando ventana");
+        
+        // La navegación específica se manejará en cada notificación individual
+        // Esto solo se asegura de que la ventana esté visible
+      });
+      
+      // Guardar la función de limpieza
+      notificationClickUnsubRef.current = unsubNotifClick;
+      
+      // Limpiar al desmontar
+      return () => {
+        if (unsubNotifClick) unsubNotifClick();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (!userData) return;
@@ -85,11 +109,15 @@ export default function NotificationListener() {
           if ((!isPageVisible || currentPath !== senderPath)) {
             // Si estamos en Electron, usar notificaciones nativas
             if (isElectron) {
+              console.log(`Enviando notificación Electron: ${notificationTitle} - ${messageText}`);
+              
+              // Usar la función correcta del API expuesto en preload.cjs
               window.electronAPI.sendNotification(notificationTitle, messageText);
               
-              // En Electron también podemos configurar la acción al hacer clic
+              // Cuando se haga clic en la notificación, navegar al chat
               window.electronAPI.onNotificationClick(() => {
-                navigate(`/chat/${msg.from}`);
+                console.log(`Navegando a: ${senderPath}`);
+                navigate(senderPath);
               });
             }
             // Si no estamos en Electron, usar el sistema de notificaciones del navegador
@@ -132,7 +160,16 @@ export default function NotificationListener() {
       }
     });
 
-    return () => unsub();
+    return () => {
+      // Limpiar el listener de Firestore
+      unsub();
+      
+      // Limpiar el listener de notificaciones de Electron si existe
+      if (notificationClickUnsubRef.current) {
+        notificationClickUnsubRef.current();
+        notificationClickUnsubRef.current = null;
+      }
+    };
   }, [userData, location.pathname, processedMsgIds, navigate, showToast]); 
 
   return null;

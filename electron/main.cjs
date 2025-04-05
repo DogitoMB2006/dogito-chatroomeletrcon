@@ -667,29 +667,77 @@ app.on('window-all-closed', () => {
 });
 
 // IPC handlers
-ipcMain.on('notification', (_, { title, body }) => {
-  const notification = new Notification({
-    title,
-    body,
-    icon: path.join(__dirname, '../public/favicon.ico')
-  });
-
-  notification.show();
-
-  notification.on('click', () => {
-    if (mainWindow) {
-      // Usar la función de restauración del background-process si está disponible
-      if (backgroundProcess && backgroundProcess.restoreWindow) {
-        backgroundProcess.restoreWindow();
-      } else {
-        if (!mainWindow.isVisible()) {
-          mainWindow.show();
-        }
-        mainWindow.focus();
-      }
-      mainWindow.webContents.send('notification-clicked');
+ipcMain.on('notification', (event, { title, body }) => {
+  log.info(`Mostrando notificación: ${title} - ${body}`);
+  
+  try {
+    // Verificar que las notificaciones estén soportadas
+    if (!Notification.isSupported()) {
+      log.warn('Las notificaciones nativas no están soportadas en este sistema');
+      return;
     }
-  });
+    
+    // Buscar un ícono apropiado
+    let iconPath = null;
+    const possiblePaths = [
+      path.join(__dirname, '../public/favicon.ico'),
+      path.join(__dirname, '../public/raw.ico'),
+      path.join(__dirname, '../public/icon.ico'),
+      path.join(__dirname, '../public/icon.png'),
+      path.join(__dirname, 'public/favicon.ico'),
+      path.join(__dirname, 'public/raw.ico')
+    ];
+    
+    for (const p of possiblePaths) {
+      if (require('fs').existsSync(p)) {
+        iconPath = p;
+        break;
+      }
+    }
+    
+    const notification = new Notification({
+      title: title || 'Notificación',
+      body: body || '',
+      icon: iconPath || undefined,
+      silent: false // Hacer que suene
+    });
+    
+    notification.show();
+    
+    // Evento cuando se hace clic en la notificación
+    notification.on('click', () => {
+      // Mostrar y enfocar la ventana principal
+      if (mainWindow) {
+        // Usar la función de restauración del background-process si está disponible
+        if (backgroundProcess && backgroundProcess.restoreWindow) {
+          backgroundProcess.restoreWindow();
+        } else {
+          if (!mainWindow.isVisible()) {
+            mainWindow.show();
+          }
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
+          mainWindow.focus();
+        }
+        
+        // Enviar el evento a la ventana del navegador
+        mainWindow.webContents.send('notification-clicked');
+        
+        // Responder al evento para que el remitente sepa que fue procesado
+        if (event.sender) {
+          event.sender.send('notification-clicked-response', { success: true });
+        }
+      }
+    });
+  } catch (error) {
+    log.error("❌ Error al mostrar notificación:", error);
+    
+    // Informar del error
+    if (event.sender) {
+      event.sender.send('notification-error', { error: error.message });
+    }
+  }
 });
 
 ipcMain.on('navigate-to', (_, route) => {

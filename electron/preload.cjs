@@ -29,6 +29,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
+  // Método único para enviar notificaciones (más consistente)
+  sendNotification: (title, body) => {
+    if (isElectron()) {
+      ipcRenderer.send('notification', { title, body });
+    } else {
+      console.warn('Función de notificación no disponible fuera de Electron');
+    }
+  },
+  
+  // Método único para manejar clicks en notificaciones
+  onNotificationClick: (callback) => {
+    if (isElectron()) {
+      const handler = () => callback();
+      ipcRenderer.on('notification-clicked', handler);
+      return () => ipcRenderer.removeListener('notification-clicked', handler);
+    }
+    return () => {}; // Función vacía para entornos no-Electron
+  },
+  
   // Navegación
   navigation: {
     navigateTo: (route) => {
