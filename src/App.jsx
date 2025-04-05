@@ -21,7 +21,7 @@ import AlertNotifications from './components/AlertNotifications';
 import NotificationService from "./utils/NotificationService";
 import { toast } from "react-toastify";
 import NotificationNavigator from "./components/NotificationNavigator";
-
+import CheckUpdates from './components/CheckUpdates';
 // Verificar si estamos en Electron
 const isElectron = window && window.electronAPI;
 
@@ -404,7 +404,7 @@ export default function App() {
           <NotificationListener />
           <GroupNotificationListener />
           <FriendRequestListener />
-          
+          <CheckUpdates />
            
           <Routes>
             <Route path="/" element={<Home />} />

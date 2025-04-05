@@ -1,8 +1,8 @@
 const { app, BrowserWindow, ipcMain, Notification, Menu, Tray, dialog } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
+console.log("🟢 main.cjs cargado correctamente desde Electron");
 
-// Configuración de registros para actualizaciones
 autoUpdater.logger = require('electron-log');
 autoUpdater.logger.transports.file.level = 'info';
 
@@ -12,6 +12,9 @@ const appVersion = app.getVersion();
 const isDev = process.env.NODE_ENV === 'development';
 
 function createWindow() {
+  // ❌ Eliminar menú predeterminado de Electron ANTES de crear la ventana
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -57,7 +60,6 @@ function createWindow() {
   });
 }
 
-// ✅ MENÚ SUPERIOR PERSONALIZADO (con Ver actualizaciones)
 function createAppMenu() {
   const template = [
     {
@@ -83,7 +85,7 @@ function createAppMenu() {
   ];
 
   const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+  Menu.setApplicationMenu(menu); // Establecer nuestro menú personalizado
 }
 
 function createTray() {
@@ -136,44 +138,39 @@ function createTray() {
 function setupAutoUpdater() {
   if (isDev) {
     autoUpdater.autoDownload = false;
-    return;
+    console.log("⚠️ Modo DEV: autoUpdater activado pero no descargará.");
+  } else {
+    console.log("✅ Modo PRODUCCIÓN: autoUpdater activado con descarga.");
+    setInterval(() => {
+      console.log("🔄 Verificando actualizaciones automáticamente...");
+      autoUpdater.checkForUpdatesAndNotify();
+    }, 60 * 60 * 1000);
+
+    autoUpdater.checkForUpdatesAndNotify();
   }
 
-  setInterval(() => {
-    autoUpdater.checkForUpdatesAndNotify();
-  }, 60 * 60 * 1000);
-
-  autoUpdater.checkForUpdatesAndNotify();
-
+  // Eventos
   autoUpdater.on('update-available', (info) => {
+    console.log("📦 Update available:", info);
     mainWindow.webContents.send('update-available', info);
-    const notification = new Notification({
-      title: '¡Actualización disponible!',
-      body: `La versión ${info.version} está disponible y se descargará automáticamente.`
-    });
-    notification.show();
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    console.log("✅ No hay actualizaciones disponibles.");
+    mainWindow.webContents.send('update-not-available');
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    console.log("⬇️ Update descargada:", info);
     mainWindow.webContents.send('update-downloaded', info);
-
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Actualización lista para instalar',
-      message: `La versión ${info.version} ha sido descargada. ¿Instalar ahora?`,
-      buttons: ['Instalar ahora', 'Instalar después']
-    }).then((buttonIndex) => {
-      if (buttonIndex.response === 0) {
-        autoUpdater.quitAndInstall(false, true);
-      }
-    });
   });
 
   autoUpdater.on('error', (err) => {
+    console.error("❌ Error al buscar actualizaciones:", err);
     mainWindow.webContents.send('update-error', err);
-    autoUpdater.logger.error(`Error en la actualización: ${err.toString()}`);
   });
 }
+
 
 app.whenReady().then(() => {
   createWindow();

@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onUpdateError: (callback) => {
       ipcRenderer.on('update-error', callback);
     },
+  onUpdateNotAvailable: (callback) => {
+    ipcRenderer.on('update-not-available', callback);
+  },
     installUpdate: () => {
       ipcRenderer.send('install-update');
     },
