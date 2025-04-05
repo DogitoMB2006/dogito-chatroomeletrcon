@@ -156,6 +156,16 @@ function createAppMenu() {
             }
           }
         },
+        {
+          label: 'Forzar reinicio',
+          click: () => {
+            if (mainWindow) {
+              // Usar reloadIgnoringCache para forzar una recarga completa
+              mainWindow.webContents.reloadIgnoringCache();
+            }
+          }
+        },
+        { type: 'separator' },
         { role: 'quit', label: 'Salir' }
       ]
     },
