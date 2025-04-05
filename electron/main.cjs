@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Notification, Menu, Tray, dialog } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
+const { setupBackgroundProcess } = require('./background-process.cjs'); // Importamos el módulo de proceso en segundo plano
 console.log("🟢 main.cjs cargado correctamente desde Electron");
 
 // Configuración mejorada de logger
@@ -11,6 +12,7 @@ autoUpdater.logger = log;
 let mainWindow;
 let tray = null;
 let updatesWindow = null;
+let backgroundProcess = null; // Referencia al proceso en segundo plano
 let updateInfo = {
   lastCheck: null,
   updateStatus: 'up-to-date',
@@ -52,20 +54,40 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
-  createTray();
+  // Configurar el proceso en segundo plano
+  backgroundProcess = setupBackgroundProcess(mainWindow);
+  log.info("🟢 Proceso en segundo plano configurado");
+
+  // Usar la bandeja del sistema del background-process si está disponible, o nuestra propia implementación
+  if (backgroundProcess && backgroundProcess.createTrayMenu) {
+    tray = backgroundProcess.createTrayMenu(mainWindow);
+    if (tray) {
+      log.info("🟢 Bandeja del sistema creada por background-process");
+    } else {
+      createTray();
+    }
+  } else {
+    createTray();
+  }
+  
   createAppMenu();
 
+  // Ya no necesitamos el handler de 'close' aquí, se maneja en background-process
+  // Solo mantenemos el evento 'closed'
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-      return false;
-    }
-  });
+  // Si por alguna razón no tenemos background-process, mantenemos el comportamiento original
+  if (!backgroundProcess) {
+    mainWindow.on('close', (event) => {
+      if (!app.isQuitting) {
+        event.preventDefault();
+        mainWindow.hide();
+        return false;
+      }
+    });
+  }
 }
 
 // Función para crear la ventana de actualizaciones
@@ -185,6 +207,7 @@ function createAppMenu() {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu); // Establecer nuestro menú personalizado
 }
+
 function createTray() {
   try {
     // Intenta con varias rutas posibles para el icono
@@ -236,7 +259,12 @@ function createTray() {
           if (mainWindow === null) {
             createWindow();
           } else {
-            mainWindow.show();
+            // Usar la función de restauración del background-process si está disponible
+            if (backgroundProcess && backgroundProcess.restoreWindow) {
+              backgroundProcess.restoreWindow();
+            } else {
+              mainWindow.show();
+            }
           }
         }
       },
@@ -270,11 +298,18 @@ function createTray() {
       if (mainWindow === null) {
         createWindow();
       } else {
-        mainWindow.show();
+        // Usar la función de restauración del background-process si está disponible
+        if (backgroundProcess && backgroundProcess.restoreWindow) {
+          backgroundProcess.restoreWindow();
+        } else {
+          mainWindow.show();
+        }
       }
     });
+    
+    log.info("🟢 Bandeja del sistema creada con éxito");
   } catch (error) {
-    console.error("❌ Error al crear la bandeja del sistema:", error);
+    log.error("❌ Error al crear la bandeja del sistema:", error);
     // Continuar sin la bandeja del sistema
   }
 }
@@ -457,8 +492,7 @@ function setupAutoUpdater() {
     // Verificar cada hora en producción (sin notificar al usuario)
     setInterval(() => {
       log.info("🔄 Verificando actualizaciones automáticamente...");
-      checkForUpdates(false); // false indica verificación autom]
-
+      checkForUpdates(false); // false indica verificación automática
     }, 60 * 60 * 1000);
 
     // Verificar al iniciar (sin notificar al usuario)
@@ -599,6 +633,27 @@ function setupAutoUpdater() {
 }
 
 app.whenReady().then(() => {
+  // Prevenir múltiples instancias (parte del código de background-process integrado aquí)
+  const gotTheLock = app.requestSingleInstanceLock();
+  if (!gotTheLock) {
+    log.warn("Otra instancia ya está corriendo. Cerrando esta instancia.");
+    app.quit();
+    return;
+  }
+
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Alguien intentó ejecutar una segunda instancia
+    if (mainWindow) {
+      if (backgroundProcess && backgroundProcess.restoreWindow) {
+        backgroundProcess.restoreWindow();
+      } else {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+
   createWindow();
   setupAutoUpdater();
 
@@ -623,10 +678,15 @@ ipcMain.on('notification', (_, { title, body }) => {
 
   notification.on('click', () => {
     if (mainWindow) {
-      if (!mainWindow.isVisible()) {
-        mainWindow.show();
+      // Usar la función de restauración del background-process si está disponible
+      if (backgroundProcess && backgroundProcess.restoreWindow) {
+        backgroundProcess.restoreWindow();
+      } else {
+        if (!mainWindow.isVisible()) {
+          mainWindow.show();
+        }
+        mainWindow.focus();
       }
-      mainWindow.focus();
       mainWindow.webContents.send('notification-clicked');
     }
   });
@@ -634,9 +694,25 @@ ipcMain.on('notification', (_, { title, body }) => {
 
 ipcMain.on('navigate-to', (_, route) => {
   if (mainWindow) {
+    // Usar la función de restauración del background-process si está disponible
+    if (backgroundProcess && backgroundProcess.restoreWindow) {
+      backgroundProcess.restoreWindow();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    mainWindow.webContents.send('navigate-to-route', route);
+  }
+});
+
+// Agregar manejador para restaurar la ventana desde otros procesos
+ipcMain.on('restore-window', () => {
+  if (backgroundProcess && backgroundProcess.restoreWindow) {
+    backgroundProcess.restoreWindow();
+  } else if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
-    mainWindow.webContents.send('navigate-to-route', route);
   }
 });
 
