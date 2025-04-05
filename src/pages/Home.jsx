@@ -7,6 +7,17 @@ export default function Home() {
   const [updates, setUpdates] = useState([
     {
       id: 1,
+      version: "v1.0.4",
+      date: "3 Abril, 2025",
+      title: "APLICACION PARA PC!!",
+      description: "ahora pueden habilitar las notificaciones!!!",
+      features: [
+        "Dure probablemente el dia completo el dia de hoy, no tenia conocimiento de electron pero lo logre!",
+        "Como conseguir la aplicacion? aqui, https://github.com/DogitoMB2006/dogito-chatroomeletrcon/releases/download/v1.1.4/Dogito-Chat-Setup-1.1.4.exe",
+      ]
+    },
+    {
+      id: 3,
       version: "v1.0.3",
       date: "3 Abril, 2025",
       title: "Que hay de nuevo?",
@@ -17,7 +28,7 @@ export default function Home() {
       ]
     },
     {
-      id: 2,
+      id: 4,
       version: "v1.0.2",
       date: "3 Abril, 2025",
       title: "Que hay de nuevo?",
@@ -31,7 +42,7 @@ export default function Home() {
       ]
     },
     {
-      id: 3,
+      id: 5,
       version: "v1.0.1",
       date: "3 Abril, 2025",
       title: "Nuevo sistema de notificaciones",
@@ -44,7 +55,7 @@ export default function Home() {
       ]
     },
     {
-      id: 4,
+      id: 6,
       version: "v1.0.0",
       date: "2 Marzo, 2025",
       title: "Mejoras de rendimiento",

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualizaciones - Dogito Chat</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --text-color: #f8f8f2;
+            --primary-color: #6366f1;
+            --border-color: #44475a;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .version-info {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+        }
+
+        .version-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .version-label {
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        .version-value {
+            font-weight: 600;
+        }
+
+        .update-status {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+        }
+
+        .debug-panel {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
+            max-height: 100px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-dot.checking {
+            background-color: var(--warning-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.up-to-date {
+            background-color: var(--success-color);
+        }
+
+        .status-dot.available {
+            background-color: var(--primary-color);
+        }
+
+        .status-dot.downloaded {
+            background-color: var(--success-color);
+        }
+
+        .status-dot.error {
+            background-color: var(--error-color);
+        }
+
+        .status-text {
+            font-weight: 500;
+        }
+
+        .progress-container {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            text-align: right;
+            margin-top: 5px;
+            opacity: 0.8;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        button {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-check {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-check:hover:not(:disabled) {
+            background-color: #5558ea;
+        }
+
+        .btn-install {
+            background-color: var(--success-color);
+            color: white;
+            display: none;
+        }
+
+        .btn-install:hover:not(:disabled) {
+            background-color: #0da56f;
+        }
+
+        .btn-close {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+        }
+
+        .btn-close:hover:not(:disabled) {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .release-notes {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .release-notes h3 {
+            margin-top: 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .release-notes p {
+            margin: 10px 0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Actualizaciones de Dogito Chat</h1>
+    </div>
+
+    <div class="debug-panel" id="debug-panel">
+        Mensajes de depuración aparecerán aquí...
+    </div>
+
+    <div class="version-info">
+        <div class="version-row">
+            <span class="version-label">Versión actual:</span>
+            <span class="version-value" id="current-version">--</span>
+        </div>
+        <div class="version-row">
+            <span class="version-label">Última verificación:</span>
+            <span class="version-value" id="last-check">--</span>
+        </div>
+    </div>
+
+    <div class="update-status">
+        <div class="status-indicator">
+            <div class="status-dot up-to-date" id="status-dot"></div>
+            <div class="status-text" id="status-text">La aplicación está actualizada</div>
+        </div>
+        <div class="progress-container" id="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-text" id="progress-text">0%</div>
+        </div>
+    </div>
+
+    <div class="release-notes" id="release-notes">
+        <h3>Notas de la versión <span id="release-version">--</span></h3>
+        <p id="release-notes-content">No hay información disponible.</p>
+    </div>
+
+    <div class="buttons">
+        <button class="btn-check" id="check-button">Verificar actualizaciones</button>
+        <button class="btn-install" id="install-button">Instalar ahora</button>
+        <button class="btn-close" id="close-button">Cerrar</button>
+    </div>
+
+    <script>
+       // Inicializar la interfaz
+function initUI() {
+    debugLog("Inicializando interfaz de usuario");
+    
+    try {
+        // Verificar si electronAPI está disponible
+        if (window.electronAPI) {
+            debugLog("API de Electron detectada");
+            
+            // Intentar obtener versión actual
+            const info = window.electronAPI.getUpdaterInfo();
+            debugLog("Información de actualización obtenida: " + JSON.stringify(info));
+            
+            // Verificar si la versión es 0.0.0 y corregirla
+            if (info.currentVersion === '0.0.0') {
+                debugLog("Detectada versión 0.0.0, estableciendo versión manual");
+                info.currentVersion = '1.1.3';
+            }
+            
+            currentVersionEl.textContent = info.currentVersion || 'Desconocida';
+            
+            if (info.lastCheck) {
+                lastCheckEl.textContent = new Date(info.lastCheck).toLocaleString();
+            }
+            
+            // Actualizar estado inicial
+            if (info.updateStatus) {
+                updateStatus(info.updateStatus, info.updateData || {});
+            }
+        } else {
+            debugLog("❌ ERROR: API de Electron no detectada");
+            currentVersionEl.textContent = 'Error: API no disponible';
+            updateStatus(STATUS.ERROR, { message: 'Error: API de Electron no disponible' });
+        }
+    } catch (err) {
+        debugLog("❌ ERROR al inicializar UI: " + err.message);
+        currentVersionEl.textContent = 'Error';
+        updateStatus(STATUS.ERROR, { message: 'Error al inicializar la interfaz' });
+    }
+}
+
+// Registrar listeners para eventos de actualización
+function setupEventListeners() {
+    debugLog("Configurando listeners de eventos");
+    
+    if (!window.electronAPI) {
+        debugLog("❌ ERROR: No se pueden registrar eventos sin API de Electron");
+        return;
+    }
+    
+    // Botón de verificar
+    checkButtonEl.addEventListener('click', () => {
+        debugLog("Botón 'Verificar actualizaciones' presionado");
+        updateStatus(STATUS.CHECKING);
+        checkButtonEl.disabled = true;
+        window.electronAPI.checkForUpdates();
+        
+        // Habilitar botón después de 10 segundos
+        setTimeout(() => {
+            debugLog("Habilitando botón de verificación (timeout)");
+            checkButtonEl.disabled = false;
+        }, 10000);
+    });
+    
+    // Botón de instalar
+    installButtonEl.addEventListener('click', () => {
+        debugLog("Botón 'Instalar ahora' presionado");
+        if (window.electronAPI.installUpdate) {
+            window.electronAPI.installUpdate();
+        }
+    });
+    
+    // Botón de cerrar
+    closeButtonEl.addEventListener('click', () => {
+        debugLog("Botón 'Cerrar' presionado");
+        if (window.electronAPI.closeUpdatesWindow) {
+            window.electronAPI.closeUpdatesWindow();
+        }
+    });
+    
+    // Eventos de actualización
+    try {
+        // Verificando actualizaciones
+        if (window.electronAPI.onCheckingForUpdates) {
+            debugLog("Registrando evento: onCheckingForUpdates");
+            window.electronAPI.onCheckingForUpdates(() => {
+                debugLog("Evento recibido: checking-for-updates");
+                updateStatus(STATUS.CHECKING);
+                checkButtonEl.disabled = true;
+            });
+        }
+        
+        // Actualización disponible
+        if (window.electronAPI.onUpdateAvailable) {
+            debugLog("Registrando evento: onUpdateAvailable");
+            window.electronAPI.onUpdateAvailable((info) => {
+                debugLog(`Evento recibido: update-available, versión: ${info?.version || 'desconocida'}`);
+                updateStatus(STATUS.AVAILABLE, {
+                    version: info.version,
+                    releaseNotes: info.releaseNotes
+                });
+                checkButtonEl.disabled = false;
+            });
+        }
+        
+        // No hay actualizaciones
+        if (window.electronAPI.onUpdateNotAvailable) {
+            debugLog("Registrando evento: onUpdateNotAvailable");
+            window.electronAPI.onUpdateNotAvailable(() => {
+                debugLog("Evento recibido: update-not-available");
+                updateStatus(STATUS.UP_TO_DATE);
+                checkButtonEl.disabled = false;
+            });
+        }
+        
+        // Progreso de descarga
+        if (window.electronAPI.onUpdateProgress) {
+            debugLog("Registrando evento: onUpdateProgress");
+            window.electronAPI.onUpdateProgress((progressInfo) => {
+                const percent = progressInfo.percent || 0;
+                debugLog(`Evento recibido: update-progress, ${percent.toFixed(2)}%`);
+                updateStatus(STATUS.DOWNLOADING, {
+                    percent: percent
+                });
+            });
+        }
+        
+        // Actualización descargada
+        if (window.electronAPI.onUpdateDownloaded) {
+            debugLog("Registrando evento: onUpdateDownloaded");
+            window.electronAPI.onUpdateDownloaded((info) => {
+                debugLog(`Evento recibido: update-downloaded, versión: ${info?.version || 'desconocida'}`);
+                updateStatus(STATUS.DOWNLOADED, {
+                    version: info.version,
+                    releaseNotes: info.releaseNotes
+                });
+                checkButtonEl.disabled = false;
+            });
+        }
+        
+        // Error de actualización
+        if (window.electronAPI.onUpdateError) {
+            debugLog("Registrando evento: onUpdateError");
+            window.electronAPI.onUpdateError((error) => {
+                debugLog(`Evento recibido: update-error, mensaje: ${error?.message || 'Error desconocido'}`);
+                updateStatus(STATUS.ERROR, {
+                    message: 'Error: ' + (error.message || 'No se pudo verificar actualizaciones')
+                });
+                checkButtonEl.disabled = false;
+            });
+        }
+        
+        // Evento específico para información de actualización
+        if (window.electronAPI.onUpdaterInfo) {
+            debugLog("Registrando evento: onUpdaterInfo");
+            window.electronAPI.onUpdaterInfo((info) => {
+                debugLog(`Evento recibido: updater-info con versión: ${info?.currentVersion || 'desconocida'}`);
+                
+                // Actualizar la información de versión
+                if (info.currentVersion === '0.0.0') {
+                    info.currentVersion = '1.1.3';
+                }
+                
+                currentVersionEl.textContent = info.currentVersion || 'Desconocida';
+                
+                if (info.lastCheck) {
+                    lastCheckEl.textContent = new Date(info.lastCheck).toLocaleString();
+                }
+                
+                // Actualizar estado si es necesario
+                if (info.updateStatus && info.updateStatus !== 'checking') {
+                    updateStatus(info.updateStatus, info.updateData || {});
+                }
+            });
+        }
+    } catch (err) {
+        debugLog(`❌ ERROR al registrar eventos: ${err.message}`);
+    }
+}
+    </script>
+</body>
+</html>

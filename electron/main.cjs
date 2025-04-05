@@ -10,6 +10,12 @@ autoUpdater.logger = log;
 
 let mainWindow;
 let tray = null;
+let updatesWindow = null;
+let updateInfo = {
+  lastCheck: null,
+  updateStatus: 'up-to-date',
+  updateData: null
+};
 const appVersion = app.getVersion();
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -62,6 +68,81 @@ function createWindow() {
   });
 }
 
+// Función para crear la ventana de actualizaciones
+function createUpdatesWindow() {
+  // Si la ventana ya existe, solo mostrarla
+  if (updatesWindow) {
+    updatesWindow.show();
+    return;
+  }
+
+  // Crear una nueva ventana
+  updatesWindow = new BrowserWindow({
+    width: 500,
+    height: 550,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    parent: mainWindow,
+    modal: false,
+    show: false,
+    icon: path.join(__dirname, '../public/raw.ico'),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'updater-preload.cjs')
+    },
+    backgroundColor: '#1e1e2e',
+    title: 'Actualizaciones de Dogito Chat'
+  });
+
+  // Cargar el HTML
+  const updatesPath = isDev
+    ? `file://${path.join(app.getAppPath(), 'public/updates.html')}`
+    : `file://${path.join(app.getAppPath(), 'dist/updates.html')}`;
+
+  updatesWindow.loadURL(updatesPath);
+  
+  // AÑADIR AQUÍ: Event handler para cuando la página termina de cargar
+  updatesWindow.webContents.on('did-finish-load', () => {
+    log.info("🔍 Ventana de actualizaciones cargada");
+    
+    // Verificar que la ventana aún existe (podría haberse cerrado mientras se cargaba)
+    if (!updatesWindow) return;
+    
+    // Enviar evento con información actualizada
+    try {
+      const info = {
+        currentVersion: getCurrentVersion(),
+        lastCheck: updateInfo.lastCheck,
+        updateStatus: updateInfo.updateStatus,
+        updateData: updateInfo.updateData
+      };
+      log.info("🔍 Enviando información a ventana de actualizaciones:", info);
+      updatesWindow.webContents.send('updater-info', info);
+    } catch (err) {
+      log.error("Error al enviar información inicial a ventana de actualizaciones:", err);
+    }
+  });
+  
+  updatesWindow.webContents.openDevTools({ mode: 'detach' });
+  
+  // No mostrar menú en la ventana de actualizaciones
+  updatesWindow.setMenu(null);
+
+  // Mostrar cuando esté lista
+  updatesWindow.once('ready-to-show', () => {
+    updatesWindow.show();
+  });
+
+  // Limpiar la referencia cuando se cierre
+  updatesWindow.on('closed', () => {
+    updatesWindow = null;
+  });
+
+  return updatesWindow;
+}
+
 function createAppMenu() {
   const template = [
     {
@@ -76,7 +157,7 @@ function createAppMenu() {
         {
           label: 'Ver actualizaciones',
           click: () => {
-            checkForUpdates(true);
+            createUpdatesWindow();
           }
         }
       ]
@@ -143,14 +224,16 @@ function createTray() {
         }
       },
       {
-        label: `Versión ${appVersion}`,
+        label: `Versión ${getCurrentVersion()}`,
         enabled: false
       },
       { type: 'separator' },
       {
         label: 'Buscar actualizaciones',
         click: () => {
-          checkForUpdates(true);
+          // Primero abrir la ventana, luego verificar actualizaciones
+          createUpdatesWindow();
+          setTimeout(() => checkForUpdates(true), 500);
         }
       },
       { type: 'separator' },
@@ -163,7 +246,7 @@ function createTray() {
       }
     ]);
 
-    tray.setToolTip(`Dogito Chat v${appVersion}`);
+    tray.setToolTip(`Dogito Chat v${getCurrentVersion()}`);
     tray.setContextMenu(contextMenu);
 
     tray.on('click', () => {
@@ -176,6 +259,27 @@ function createTray() {
   } catch (error) {
     console.error("❌ Error al crear la bandeja del sistema:", error);
     // Continuar sin la bandeja del sistema
+  }
+}
+
+// Función para obtener la versión actual de manera consistente
+function getCurrentVersion() {
+  try {
+    // Primero intenta obtener la versión desde package.json
+    const packageJsonPath = path.join(app.getAppPath(), 'package.json');
+    if (require('fs').existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(require('fs').readFileSync(packageJsonPath, 'utf8'));
+      if (packageJson.version && packageJson.version !== '0.0.0') {
+        return packageJson.version;
+      }
+    }
+    
+    // Si no, usa la versión de la app
+    const version = app.getVersion();
+    return version !== '0.0.0' ? version : '1.1.3';
+  } catch (error) {
+    log.error("Error al obtener versión:", error);
+    return '1.1.3'; // Fallback definitivo
   }
 }
 
@@ -198,6 +302,13 @@ function configureAutoUpdater() {
 function checkForUpdates(manual = true) {
   log.info(`🔍 Verificando actualizaciones ${manual ? 'manualmente' : 'automáticamente'}...`);
   
+  // Actualizar la información de la última verificación
+  updateInfo = {
+    lastCheck: new Date().toISOString(),
+    updateStatus: 'checking',
+    updateData: null
+  };
+  
   try {
     // Notificar al frontend que estamos verificando
     if (mainWindow) {
@@ -208,42 +319,89 @@ function checkForUpdates(manual = true) {
       mainWindow.webContents.send('checking-for-updates');
     }
     
+    // Notificar a la ventana de actualizaciones si existe
+    if (updatesWindow) {
+      updatesWindow.webContents.send('checking-for-updates');
+    }
+    
     // Si estamos en desarrollo, mostrar un mensaje de prueba
     if (isDev) {
       log.info("⚠️ Modo desarrollo: simulando verificación/descarga de actualizaciones");
       
       // Simular evento de actualización disponible después de 2 segundos
       setTimeout(() => {
+        const fakeUpdateInfo = {
+          version: '999.0.0',
+          releaseDate: new Date().toISOString(),
+          releaseNotes: 'Esta es una actualización simulada para probar la interfaz. Incluye:\n\n- Nuevas características\n- Corrección de errores\n- Mejoras de rendimiento'
+        };
+        
+        // Actualizar información
+        updateInfo = {
+          lastCheck: new Date().toISOString(),
+          updateStatus: 'available',
+          updateData: fakeUpdateInfo
+        };
+        
+        // Notificar ventanas
         if (mainWindow) {
-          mainWindow.webContents.send('update-available', {
-            version: '999.0.0',
-            releaseDate: new Date().toISOString()
-          });
-          
-          // Simular progreso de descarga
-          let progress = 0;
-          const progressInterval = setInterval(() => {
-            progress += 10;
-            mainWindow.webContents.send('update-progress', {
-              percent: progress,
-              bytesPerSecond: 1000000,
-              total: 90000000,
-              transferred: progress * 900000
-            });
-            
-            if (progress >= 100) {
-              clearInterval(progressInterval);
-              
-              // Simular actualización descargada
-              setTimeout(() => {
-                mainWindow.webContents.send('update-downloaded', {
-                  version: '999.0.0',
-                  releaseDate: new Date().toISOString()
-                });
-              }, 1000);
-            }
-          }, 1000);
+          mainWindow.webContents.send('update-available', fakeUpdateInfo);
         }
+        if (updatesWindow) {
+          updatesWindow.webContents.send('update-available', fakeUpdateInfo);
+        }
+        
+        // Simular progreso de descarga
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+          progress += 10;
+          const progressData = {
+            percent: progress,
+            bytesPerSecond: 1000000,
+            total: 90000000,
+            transferred: progress * 900000
+          };
+          
+          // Actualizar información
+          updateInfo = {
+            ...updateInfo,
+            updateStatus: 'downloading',
+            updateData: {
+              ...updateInfo.updateData,
+              progress: progressData
+            }
+          };
+          
+          // Notificar ventanas
+          if (mainWindow) {
+            mainWindow.webContents.send('update-progress', progressData);
+          }
+          if (updatesWindow) {
+            updatesWindow.webContents.send('update-progress', progressData);
+          }
+          
+          if (progress >= 100) {
+            clearInterval(progressInterval);
+            
+            // Simular actualización descargada
+            setTimeout(() => {
+              // Actualizar información
+              updateInfo = {
+                lastCheck: new Date().toISOString(),
+                updateStatus: 'downloaded',
+                updateData: fakeUpdateInfo
+              };
+              
+              // Notificar ventanas
+              if (mainWindow) {
+                mainWindow.webContents.send('update-downloaded', fakeUpdateInfo);
+              }
+              if (updatesWindow) {
+                updatesWindow.webContents.send('update-downloaded', fakeUpdateInfo);
+              }
+            }, 1000);
+          }
+        }, 1000);
       }, 2000);
       
       return;
@@ -253,8 +411,20 @@ function checkForUpdates(manual = true) {
     autoUpdater.checkForUpdates();
   } catch (error) {
     log.error("❌ Error al iniciar verificación de actualizaciones:", error);
+    
+    // Actualizar información
+    updateInfo = {
+      lastCheck: new Date().toISOString(),
+      updateStatus: 'error',
+      updateData: { error: error }
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('update-error', { message: error.message });
+    }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('update-error', { message: error.message });
     }
   }
 }
@@ -270,7 +440,8 @@ function setupAutoUpdater() {
     // Verificar cada hora en producción (sin notificar al usuario)
     setInterval(() => {
       log.info("🔄 Verificando actualizaciones automáticamente...");
-      checkForUpdates(false); // false indica verificación automática
+      checkForUpdates(false); // false indica verificación autom]
+
     }, 60 * 60 * 1000);
 
     // Verificar al iniciar (sin notificar al usuario)
@@ -282,56 +453,131 @@ function setupAutoUpdater() {
   // Eventos de actualización
   autoUpdater.on('checking-for-update', () => {
     log.info("🔍 Verificando actualizaciones disponibles...");
+    
+    // Actualizar información
+    updateInfo = {
+      lastCheck: new Date().toISOString(),
+      updateStatus: 'checking',
+      updateData: null
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('checking-for-updates');
+    }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('checking-for-updates');
     }
   });
 
   autoUpdater.on('update-available', (info) => {
     log.info("📦 Update available:", info);
+    
+    // Actualizar información
+    updateInfo = {
+      lastCheck: new Date().toISOString(),
+      updateStatus: 'available',
+      updateData: info
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('update-available', info);
+    }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('update-available', info);
     }
   });
 
   autoUpdater.on('update-not-available', (info) => {
     log.info("✅ No hay actualizaciones disponibles.");
+    
+    // Actualizar información
+    updateInfo = {
+      lastCheck: new Date().toISOString(),
+      updateStatus: 'up-to-date',
+      updateData: null
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('update-not-available');
+    }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('update-not-available');
     }
   });
 
   autoUpdater.on('error', (err) => {
     log.error("❌ Error al buscar actualizaciones:", err);
+    
+    // Actualizar información
+    updateInfo = {
+      lastCheck: new Date().toISOString(),
+      updateStatus: 'error',
+      updateData: { error: err }
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('update-error', { message: err.message });
+    }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('update-error', { message: err.message });
     }
   });
 
   autoUpdater.on('download-progress', (progressObj) => {
     log.info(`⏳ Progreso de descarga: ${progressObj.percent.toFixed(2)}%`);
+    
+    // Actualizar información
+    updateInfo = {
+      ...updateInfo,
+      updateStatus: 'downloading',
+      updateData: {
+        ...updateInfo.updateData,
+        progress: progressObj
+      }
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('update-progress', progressObj);
+    }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('update-progress', progressObj);
     }
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     log.info("⬇️ Update descargada:", info);
+    
+    // Actualizar información
+    updateInfo = {
+      lastCheck: new Date().toISOString(),
+      updateStatus: 'downloaded',
+      updateData: info
+    };
+    
+    // Notificar ventanas
     if (mainWindow) {
       mainWindow.webContents.send('update-downloaded', info);
-      
-      // Opcional: Mostrar diálogo nativo para preguntar al usuario
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Actualización disponible',
-        message: 'Se ha descargado una nueva versión. ¿Desea reiniciar para instalarla?',
-        buttons: ['Instalar ahora', 'Más tarde']
-      }).then(({ response }) => {
-        if (response === 0) {
-          autoUpdater.quitAndInstall(false, true);
-        }
-      });
     }
+    if (updatesWindow) {
+      updatesWindow.webContents.send('update-downloaded', info);
+    }
+    
+    // Dialog opcional
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Actualización disponible',
+      message: 'Se ha descargado una nueva versión. ¿Desea reiniciar para instalarla?',
+      buttons: ['Instalar ahora', 'Más tarde']
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.quitAndInstall(false, true);
+      }
+    });
   });
 }
 
@@ -378,7 +624,17 @@ ipcMain.on('navigate-to', (_, route) => {
 });
 
 ipcMain.on('get-app-version', (event) => {
-  event.returnValue = app.getVersion();
+  event.returnValue = getCurrentVersion();
+});
+
+// Método explícito para obtener la versión de manera asíncrona
+ipcMain.handle('get-app-version-async', async () => {
+  try {
+    return getCurrentVersion();
+  } catch (error) {
+    log.error("Error al obtener versión:", error);
+    return '1.1.3'; // Fallback como último recurso
+  }
 });
 
 ipcMain.on('check-for-updates', () => {
@@ -392,4 +648,23 @@ ipcMain.on('install-update', () => {
 
 ipcMain.on('online-status-changed', (_, status) => {
   log.info('Estado de conexión:', status);
+});
+
+// Nuevos manejadores para la ventana de actualizaciones
+ipcMain.on('get-updater-info', (event) => {
+  log.info("🔍 Solicitud de información de actualización");
+  const info = {
+    currentVersion: getCurrentVersion(),
+    lastCheck: updateInfo.lastCheck,
+    updateStatus: updateInfo.updateStatus,
+    updateData: updateInfo.updateData
+  };
+  log.info("🔍 Información de actualización:", info);
+  event.returnValue = info;
+});
+
+ipcMain.on('close-updates-window', () => {
+  if (updatesWindow) {
+    updatesWindow.close();
+  }
 });
