@@ -148,6 +148,14 @@ function createAppMenu() {
     {
       label: 'Archivo',
       submenu: [
+        {
+          label: 'Recargar sitio web',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.reload();
+            }
+          }
+        },
         { role: 'quit', label: 'Salir' }
       ]
     },
@@ -167,7 +175,6 @@ function createAppMenu() {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu); // Establecer nuestro menú personalizado
 }
-
 function createTray() {
   try {
     // Intenta con varias rutas posibles para el icono
