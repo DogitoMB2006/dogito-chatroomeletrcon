@@ -76,7 +76,7 @@ function createAppMenu() {
         {
           label: 'Ver actualizaciones',
           click: () => {
-            checkForUpdates();
+            checkForUpdates(true);
           }
         }
       ]
@@ -150,7 +150,7 @@ function createTray() {
       {
         label: 'Buscar actualizaciones',
         click: () => {
-          checkForUpdates();
+          checkForUpdates(true);
         }
       },
       { type: 'separator' },
@@ -179,15 +179,78 @@ function createTray() {
   }
 }
 
+// Configuración específica para autoUpdater
+function configureAutoUpdater() {
+  // Configuración de GitHub para el autoupdate
+  autoUpdater.autoDownload = !isDev;
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.allowPrerelease = false;
+  
+  // En desarrollo, podemos usar estos parámetros para pruebas
+  if (isDev) {
+    // Usar estas opciones solo para pruebas en desarrollo
+    // autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml');
+    autoUpdater.forceDevUpdateConfig = true;
+  }
+}
+
 // Función unificada para verificar actualizaciones
-function checkForUpdates() {
-  log.info("🔍 Verificando actualizaciones manualmente...");
+function checkForUpdates(manual = true) {
+  log.info(`🔍 Verificando actualizaciones ${manual ? 'manualmente' : 'automáticamente'}...`);
+  
   try {
-    // Asegurarse de que la ventana exista antes de enviar un mensaje
+    // Notificar al frontend que estamos verificando
     if (mainWindow) {
+      // Si es una verificación manual, enviar evento especial
+      if (manual) {
+        mainWindow.webContents.send('manual-check-updates');
+      }
       mainWindow.webContents.send('checking-for-updates');
     }
-    autoUpdater.checkForUpdatesAndNotify();
+    
+    // Si estamos en desarrollo, mostrar un mensaje de prueba
+    if (isDev) {
+      log.info("⚠️ Modo desarrollo: simulando verificación/descarga de actualizaciones");
+      
+      // Simular evento de actualización disponible después de 2 segundos
+      setTimeout(() => {
+        if (mainWindow) {
+          mainWindow.webContents.send('update-available', {
+            version: '999.0.0',
+            releaseDate: new Date().toISOString()
+          });
+          
+          // Simular progreso de descarga
+          let progress = 0;
+          const progressInterval = setInterval(() => {
+            progress += 10;
+            mainWindow.webContents.send('update-progress', {
+              percent: progress,
+              bytesPerSecond: 1000000,
+              total: 90000000,
+              transferred: progress * 900000
+            });
+            
+            if (progress >= 100) {
+              clearInterval(progressInterval);
+              
+              // Simular actualización descargada
+              setTimeout(() => {
+                mainWindow.webContents.send('update-downloaded', {
+                  version: '999.0.0',
+                  releaseDate: new Date().toISOString()
+                });
+              }, 1000);
+            }
+          }, 1000);
+        }
+      }, 2000);
+      
+      return;
+    }
+    
+    // En producción, verificar normalmente
+    autoUpdater.checkForUpdates();
   } catch (error) {
     log.error("❌ Error al iniciar verificación de actualizaciones:", error);
     if (mainWindow) {
@@ -197,19 +260,23 @@ function checkForUpdates() {
 }
 
 function setupAutoUpdater() {
+  // Primero configurar el autoupdater
+  configureAutoUpdater();
+  
   if (isDev) {
-    autoUpdater.autoDownload = false;
-    log.info("⚠️ Modo DEV: autoUpdater activado pero no descargará.");
+    log.info("⚠️ Modo DEV: autoUpdater activado pero no descargará automáticamente.");
   } else {
-    log.info("✅ Modo PRODUCCIÓN: autoUpdater activado con descarga.");
-    // Verificar cada hora en producción
+    log.info("✅ Modo PRODUCCIÓN: autoUpdater activado con descarga automática.");
+    // Verificar cada hora en producción (sin notificar al usuario)
     setInterval(() => {
       log.info("🔄 Verificando actualizaciones automáticamente...");
-      checkForUpdates();
+      checkForUpdates(false); // false indica verificación automática
     }, 60 * 60 * 1000);
 
-    // Verificar al iniciar
-    checkForUpdates();
+    // Verificar al iniciar (sin notificar al usuario)
+    setTimeout(() => {
+      checkForUpdates(false);
+    }, 10000); // Verificar 10 segundos después del inicio
   }
 
   // Eventos de actualización
@@ -311,11 +378,11 @@ ipcMain.on('navigate-to', (_, route) => {
 });
 
 ipcMain.on('get-app-version', (event) => {
-  event.sender.send('app-version', app.getVersion());
+  event.returnValue = app.getVersion();
 });
 
 ipcMain.on('check-for-updates', () => {
-  checkForUpdates();
+  checkForUpdates(true);
 });
 
 ipcMain.on('install-update', () => {

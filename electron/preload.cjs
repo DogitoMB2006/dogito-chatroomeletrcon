@@ -48,18 +48,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
-  // Información de la aplicación
-  app: {
-    getVersion: () => {
-      if (isElectron()) {
-        ipcRenderer.send('get-app-version');
-        return new Promise((resolve) => {
-          ipcRenderer.once('app-version', (_, version) => resolve(version));
-        });
-      } else {
-        return Promise.resolve('0.0.0-dev'); // Versión por defecto para desarrollo web
-      }
+  // Funciones de online/offline
+  setOnlineStatus: (status) => {
+    if (isElectron()) {
+      ipcRenderer.send('online-status-changed', status ? 'online' : 'offline');
     }
+  },
+  
+  // Información de la aplicación
+  isDev: process.env.NODE_ENV === 'development',
+  
+  getAppInfo: () => {
+    if (isElectron()) {
+      return {
+        appVersion: ipcRenderer.sendSync('get-app-version'),
+        platform: process.platform
+      };
+    } else {
+      return {
+        appVersion: '0.0.0-dev',
+        platform: 'web'
+      };
+    }
+  },
+  
+  // Eventos manuales de actualización
+  onManualCheckForUpdates: (callback) => {
+    if (isElectron()) {
+      const handler = () => callback();
+      ipcRenderer.on('manual-check-updates', handler);
+      return () => ipcRenderer.removeListener('manual-check-updates', handler);
+    }
+    return () => {};
   },
   
   // Sistema de actualizaciones
@@ -67,6 +87,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Acciones
     checkForUpdates: () => {
       if (isElectron()) {
+        console.log("📣 Frontend solicitando verificación de actualizaciones");
         ipcRenderer.send('check-for-updates');
       } else {
         console.warn('Función de actualización no disponible fuera de Electron');
@@ -74,6 +95,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     installUpdate: () => {
       if (isElectron()) {
+        console.log("📣 Frontend solicitando instalación de actualización");
         ipcRenderer.send('install-update');
       } else {
         console.warn('Función de actualización no disponible fuera de Electron');
