@@ -34,6 +34,7 @@ import {
   MdKeyboardArrowDown
 } from "react-icons/md";
 import GroupSettings from "./GroupSettings";
+import GroupMute from "./GroupMute"; // Importamos el nuevo componente
 import Staff from "../components/Staff";
 import ViewProfile from "./ViewProfile";
 import ViewGroupMembers from "./ViewGroupMembers";
@@ -281,6 +282,14 @@ export default function GroupChat() {
               </div>
               
               <div className="flex items-center">
+                {/* Añadimos el componente GroupMute aquí */}
+                {userData && (
+                  <GroupMute 
+                    groupId={groupId}
+                    userId={userData.username}
+                  />
+                )}
+                
                 <button
                   onClick={() => setViewingMembers(true)}
                   className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full mr-2"

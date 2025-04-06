@@ -45,6 +45,16 @@ export default function GroupNotificationListener() {
 
     const notifKey = "group_last_notif";
     const lastSeen = JSON.parse(localStorage.getItem(notifKey) || "{}");
+    
+    // Cargar los grupos silenciados desde localStorage
+    const getMutedGroups = () => {
+      try {
+        return JSON.parse(localStorage.getItem('mutedGroups') || '[]');
+      } catch (e) {
+        console.error("Error al cargar grupos silenciados:", e);
+        return [];
+      }
+    };
 
     const unsubMessageListeners = new Map(); 
 
@@ -90,7 +100,21 @@ export default function GroupNotificationListener() {
             data.from !== userData.username &&
             (!lastNotif || lastNotif !== msgId)
           ) {
-            // Siempre mostrar el toast interno de la app
+            // Comprobar si el grupo está silenciado
+            const mutedGroups = getMutedGroups();
+            const isGroupMuted = mutedGroups.includes(groupId);
+            
+            // Actualizar el registro del último mensaje visto
+            lastSeen[groupId] = msgId;
+            localStorage.setItem(notifKey, JSON.stringify(lastSeen));
+            
+            // Si el grupo está silenciado, no mostrar notificaciones pero sí actualizar el último mensaje visto
+            if (isGroupMuted) {
+              console.log(`Grupo ${groupId} silenciado, no mostrando notificación`);
+              return;
+            }
+
+            // Siempre mostrar el toast interno de la app (incluso para grupos silenciados)
             showToast({
               username: `${data.from} • ${group.name}`,
               text: data.text || "📷 Imagen",
@@ -158,9 +182,6 @@ export default function GroupNotificationListener() {
                 console.error("Error al mostrar notificación de grupo:", error);
               }
             }
-
-            lastSeen[groupId] = msgId;
-            localStorage.setItem(notifKey, JSON.stringify(lastSeen));
           }
         });
 
