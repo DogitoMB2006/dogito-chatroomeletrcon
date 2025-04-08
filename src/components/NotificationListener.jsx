@@ -25,28 +25,21 @@ export default function NotificationListener() {
   const navigate = useNavigate();
   const [processedMsgIds] = useState(new Set()); 
   
-  // Montar un único manejador para navegación entre chats
+  const notificationClickUnsubRef = useRef(null);
+
   useEffect(() => {
-    if (!isElectron) return;
-    
-    const handleNotificationClick = (event, payload) => {
-      if (payload && payload.route) {
-        console.log(`Notificación de mensaje privado clickeada, navegando a: ${payload.route}`);
-        navigate(payload.route);
-      }
-    };
-    
-    // Este manejador es solo una copia de seguridad por si el NotificationNavigator no funciona
-    if (window.electronAPI.onNotificationClick) {
-      const unsubscribe = window.electronAPI.onNotificationClick(handleNotificationClick);
+    if (isElectron) {
+      const unsubNotifClick = window.electronAPI.onNotificationClick(() => {
+        console.log("Notificación de mensaje privado clickeada");
+      });
+      
+      notificationClickUnsubRef.current = unsubNotifClick;
       
       return () => {
-        if (typeof unsubscribe === 'function') {
-          unsubscribe();
-        }
+        if (unsubNotifClick) unsubNotifClick();
       };
     }
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     if (!userData) return;
@@ -107,21 +100,20 @@ export default function NotificationListener() {
         try {
           if ((!isPageVisible || currentPath !== senderPath)) {
             // Si estamos en Electron, usar notificaciones nativas
-            if (isElectron && window.electronAPI) {
-              // CAMBIO CLAVE: Guardar la ruta en el payload para NotificationNavigator
-              const payload = { 
-                route: senderPath,
-                type: 'private',
-                from: msg.from 
-              };
+            if (isElectron) {
+              console.log(`Enviando notificación de mensaje privado: ${notificationTitle} - ${messageText}`);
               
-              console.log(`Enviando notificación Electron con payload:`, payload);
+              // IMPORTANTE: Usar exactamente el mismo enfoque que en GroupNotificationListener
+              window.electronAPI.sendNotification(notificationTitle, messageText);
               
-              // Usar la función sendNotification de ipcMain con el payload
-              window.electronAPI.sendNotification(notificationTitle, messageText, payload);
+              // Configurar navegación para esta notificación específica 
+              const finalSenderPath = senderPath; // Capturar en closure
               
-              // Ya no registramos manejadores adicionales, dejamos que NotificationNavigator se encargue
-              // Esto evita sobrescribir los manejadores existentes
+              // Registramos un nuevo handler específico para esta notificación
+              window.electronAPI.onNotificationClick(() => {
+                console.log(`Navegando a chat privado: ${finalSenderPath}`);
+                navigate(finalSenderPath);
+              });
             }
             // Si no estamos en Electron, usar el sistema de notificaciones del navegador
             else if (Notification.permission === 'granted' && 
@@ -164,8 +156,12 @@ export default function NotificationListener() {
     });
 
     return () => {
-      // Limpiar el listener de Firestore
       unsub();
+      
+      if (notificationClickUnsubRef.current) {
+        notificationClickUnsubRef.current();
+        notificationClickUnsubRef.current = null;
+      }
     };
   }, [userData, location.pathname, processedMsgIds, navigate, showToast]); 
 
