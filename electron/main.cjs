@@ -746,7 +746,6 @@ app.on('quit', () => {
   }
 });
 
-// IPC handlers
 ipcMain.on('get-app-version', (event) => {
   event.returnValue = getCurrentVersion();
 });
@@ -786,12 +785,13 @@ ipcMain.on('get-updater-info', (event) => {
   log.info("🔍 Información de actualización:", info);
   event.returnValue = info;
 });
-
 ipcMain.on('close-updates-window', () => {
   if (updatesWindow) {
     updatesWindow.close();
   }
-});on('notification', (event, { title, body, payload = null }) => {
+});
+
+ipcMain.on('notification', (event, { title, body, payload = null }) => {
   log.info(`Mostrando notificación: ${title} - ${body}`);
   if (payload) {
     log.info(`Con payload adicional:`, payload);
@@ -804,67 +804,67 @@ ipcMain.on('close-updates-window', () => {
       return;
     }
     
-       // Buscar un ícono apropiado
-       let iconPath = null;
-       const possiblePaths = [
-         path.join(__dirname, '../public/favicon.ico'),
-         path.join(__dirname, '../public/raw.ico'),
-         path.join(__dirname, '../public/icon.ico'),
-         path.join(__dirname, '../public/icon.png'),
-         path.join(__dirname, 'public/favicon.ico'),
-         path.join(__dirname, 'public/raw.ico')
-       ];
+    // Buscar un ícono apropiado
+    let iconPath = null;
+    const possiblePaths = [
+      path.join(__dirname, '../public/favicon.ico'),
+      path.join(__dirname, '../public/raw.ico'),
+      path.join(__dirname, '../public/icon.ico'),
+      path.join(__dirname, '../public/icon.png'),
+      path.join(__dirname, 'public/favicon.ico'),
+      path.join(__dirname, 'public/raw.ico')
+    ];
     
-       for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-          iconPath = p;
-          break;
-        }
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        iconPath = p;
+        break;
       }
+    }
     
-      const notification = new Notification({
-        title: title || 'Notificación',
-        body: body || '',
-        icon: iconPath || undefined,
-        silent: false // Hacer que suene
-      });
+    const notification = new Notification({
+      title: title || 'Notificación',
+      body: body || '',
+      icon: iconPath || undefined,
+      silent: false // Hacer que suene
+    });
     
     notification.show();
     
-   // Evento cuando se hace clic en la notificación
-   notification.on('click', () => {
-    // Mostrar y enfocar la ventana principal
-    if (mainWindow) {
-      // Usar la función de restauración del background-process si está disponible
-      if (backgroundProcess && backgroundProcess.restoreWindow) {
-        backgroundProcess.restoreWindow();
-      } else {
-        if (!mainWindow.isVisible()) {
-          mainWindow.show();
+    // Evento cuando se hace clic en la notificación
+    notification.on('click', () => {
+      // Mostrar y enfocar la ventana principal
+      if (mainWindow) {
+        // Usar la función de restauración del background-process si está disponible
+        if (backgroundProcess && backgroundProcess.restoreWindow) {
+          backgroundProcess.restoreWindow();
+        } else {
+          if (!mainWindow.isVisible()) {
+            mainWindow.show();
+          }
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
+          mainWindow.focus();
         }
-        if (mainWindow.isMinimized()) {
-          mainWindow.restore();
+        
+        // Enviar el evento a la ventana del navegador, INCLUYENDO EL PAYLOAD
+        mainWindow.webContents.send('notification-clicked', payload);
+        
+        // Responder al evento para que el remitente sepa que fue procesado
+        if (event.sender) {
+          event.sender.send('notification-clicked-response', { success: true, payload });
         }
-        mainWindow.focus();
       }
-      
-      // Enviar el evento a la ventana del navegador, INCLUYENDO EL PAYLOAD
-      mainWindow.webContents.send('notification-clicked', payload);
-      
-      // Responder al evento para que el remitente sepa que fue procesado
-      if (event.sender) {
-        event.sender.send('notification-clicked-response', { success: true, payload });
-      }
+    });
+  } catch (error) {
+    log.error("❌ Error al mostrar notificación:", error);
+    
+    // Informar del error
+    if (event.sender) {
+      event.sender.send('notification-error', { error: error.message });
     }
-  });
-} catch (error) {
-  log.error("❌ Error al mostrar notificación:", error);
-  
-  // Informar del error
-  if (event.sender) {
-    event.sender.send('notification-error', { error: error.message });
   }
-}
 });
 
 ipcMain.on('navigate-to', (_, route) => {
@@ -891,4 +891,3 @@ ipcMain.on('restore-window', () => {
   }
 });
 
-backgroundProcess.restoreWindow();
