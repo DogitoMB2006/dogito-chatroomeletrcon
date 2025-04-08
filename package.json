@@ -1,7 +1,7 @@
 {
   "name": "dogito-chatroom",
   "private": true,
-  "version": "1.2.7",
+  "version": "1.2.9",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -23,6 +23,7 @@
     "date-fns": "^4.1.0",
     "electron-log": "^5.1.1",
     "electron-updater": "^6.1.7",
+    "emoji.json": "^15.1.0",
     "firebase": "^11.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -1,8 +1,8 @@
-version: 1.2.6
+version: 1.2.7
 files:
-  - url: Dogito-Chat-Setup-1.2.6.exe
-    sha512: F+4CrEu1Z3NG1H8ziWKiDTR64tz8XNyeNjYMA6UdjHjZqQc08j4XoYJCRLh6jWvE1gHeBLKGcij2KRlFHirMKg==
-    size: 144160687
-path: Dogito-Chat-Setup-1.2.6.exe
-sha512: F+4CrEu1Z3NG1H8ziWKiDTR64tz8XNyeNjYMA6UdjHjZqQc08j4XoYJCRLh6jWvE1gHeBLKGcij2KRlFHirMKg==
-releaseDate: '2025-04-08T16:17:29.832Z'
+  - url: Dogito-Chat-Setup-1.2.7.exe
+    sha512: LKCU7US2XGOs72OgGkTrMAqt8o6C4izFxQMI9gJW9VLI9+13K5+/7oUoDEi/bJHxXjievuG/3VbxYsKRFk26gQ==
+    size: 144159851
+path: Dogito-Chat-Setup-1.2.7.exe
+sha512: LKCU7US2XGOs72OgGkTrMAqt8o6C4izFxQMI9gJW9VLI9+13K5+/7oUoDEi/bJHxXjievuG/3VbxYsKRFk26gQ==
+releaseDate: '2025-04-08T16:29:19.847Z'
