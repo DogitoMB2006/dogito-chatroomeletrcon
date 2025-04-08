@@ -305,6 +305,70 @@ function ElectronFeatures() {
   return null;
 }
 
+// Componente para solucionar problema de inputs no clickeables
+function InputFocusFixer() {
+  useEffect(() => {
+    // Esta función soluciona el problema de inputs que no responden al primer clic
+    const fixInputFocus = () => {
+      // En Electron, a veces hay un problema con los event listeners de los inputs
+      if (inElectron) {
+        logger.log("🔧 Aplicando solución para mejorar la respuesta de los inputs");
+        
+        // Forzar un redibujado del DOM puede ayudar a solucionar problemas de eventos
+        const forceReflow = () => {
+          document.body.getBoundingClientRect();
+        };
+        
+        // Primera ejecución inmediata
+        forceReflow();
+        
+        // Segunda ejecución después de que todo esté cargado
+        setTimeout(forceReflow, 100);
+        
+        // Forzar el foco en el primer input visible (opcional)
+        setTimeout(() => {
+          const firstInput = document.querySelector('input:not([type="hidden"])');
+          if (firstInput) {
+            firstInput.blur();  // Primero quitar el foco
+            firstInput.focus(); // Luego volver a aplicarlo
+            firstInput.blur();  // Y finalmente quitarlo para no interferir con la UX
+          }
+        }, 200);
+        
+        // Solucionar problema específico de Electron con los eventos de mouse
+        const fixElectronInputs = () => {
+          const inputs = document.querySelectorAll('input, textarea');
+          inputs.forEach(input => {
+            // Asegurarse de que los eventos de mouse estén correctamente registrados
+            const clone = input.cloneNode(true);
+            input.parentNode.replaceChild(clone, input);
+            
+            // Preservar los manejadores de eventos React
+            if (input._valueTracker) {
+              clone._valueTracker = input._valueTracker;
+            }
+          });
+        };
+        
+        // Aplicar solución para inputs en Electron después de un corto retraso
+        setTimeout(fixElectronInputs, 300);
+      }
+    };
+    
+    // Ejecutar al montar
+    fixInputFocus();
+    
+    // Ejecutar también cuando cambie la ruta
+    window.addEventListener('hashchange', fixInputFocus);
+    
+    return () => {
+      window.removeEventListener('hashchange', fixInputFocus);
+    };
+  }, []);
+  
+  return null;
+}
+
 export default function App() {
   // Inicializar el sistema de notificaciones y registrar el Service Worker
   useEffect(() => {
@@ -422,6 +486,10 @@ export default function App() {
           {/* Características específicas de Electron */}
           {inElectron && <ElectronFeatures />}
           {inElectron && window.electronAPI && <NotificationNavigator />}
+          
+          {/* Nuevo componente para solucionar problemas de inputs */}
+          <InputFocusFixer />
+          
           <NotificationListener />
           <GroupNotificationListener />
           <FriendRequestListener />

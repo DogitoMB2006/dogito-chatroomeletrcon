@@ -24,30 +24,42 @@ export default function NotificationListener() {
   const location = useLocation();
   const navigate = useNavigate();
   const [processedMsgIds] = useState(new Set()); 
+  const pendingNavigationRef = useRef(null);
   
   // Referencia para la limpieza de event listeners
   const notificationClickUnsubRef = useRef(null);
 
+  // Configurar un manejador global para las notificaciones en Electron
   useEffect(() => {
-    // Configurar el handler para notificaciones en Electron una sola vez
-    if (isElectron) {
-      // Registrar el listener para clicks en notificaciones
-      const unsubNotifClick = window.electronAPI.onNotificationClick(() => {
-        console.log("Notificación clickeada, restaurando ventana");
-        
-        // La navegación específica se manejará en cada notificación individual
-        // Esto solo se asegura de que la ventana esté visible
-      });
+    if (!isElectron || !window.electronAPI) return;
+    
+    console.log("Configurando manejador global de clics en notificaciones para mensajes privados");
+    
+    // Registrar el listener para clicks en notificaciones
+    const unsubNotifClick = window.electronAPI.onNotificationClick(() => {
+      console.log("Notificación de mensaje privado clickeada");
       
-      // Guardar la función de limpieza
-      notificationClickUnsubRef.current = unsubNotifClick;
-      
-      // Limpiar al desmontar
-      return () => {
-        if (unsubNotifClick) unsubNotifClick();
-      };
-    }
-  }, []);
+      if (pendingNavigationRef.current) {
+        console.log(`Navegando a: ${pendingNavigationRef.current}`);
+        navigate(pendingNavigationRef.current);
+        pendingNavigationRef.current = null;
+      } else {
+        console.log("No hay ruta de navegación pendiente");
+      }
+    });
+    
+    // Guardar la función de limpieza
+    notificationClickUnsubRef.current = unsubNotifClick;
+    
+    // Limpiar al desmontar
+    return () => {
+      if (unsubNotifClick) {
+        console.log("Limpiando manejador de clics en notificaciones");
+        unsubNotifClick();
+        notificationClickUnsubRef.current = null;
+      }
+    };
+  }, [navigate]);
 
   useEffect(() => {
     if (!userData) return;
@@ -108,17 +120,17 @@ export default function NotificationListener() {
         try {
           if ((!isPageVisible || currentPath !== senderPath)) {
             // Si estamos en Electron, usar notificaciones nativas
-            if (isElectron) {
+            if (isElectron && window.electronAPI) {
               console.log(`Enviando notificación Electron: ${notificationTitle} - ${messageText}`);
+              
+              // IMPORTANTE: Guardar la ruta de navegación para usarla cuando se haga clic en la notificación
+              pendingNavigationRef.current = senderPath;
               
               // Usar la función correcta del API expuesto en preload.cjs
               window.electronAPI.sendNotification(notificationTitle, messageText);
               
-              // Cuando se haga clic en la notificación, navegar al chat
-              window.electronAPI.onNotificationClick(() => {
-                console.log(`Navegando a: ${senderPath}`);
-                navigate(senderPath);
-              });
+              // Ya no registramos un nuevo manejador para cada notificación
+              // El manejador global configurado anteriormente se encargará de la navegación
             }
             // Si no estamos en Electron, usar el sistema de notificaciones del navegador
             else if (Notification.permission === 'granted' && 
@@ -163,12 +175,6 @@ export default function NotificationListener() {
     return () => {
       // Limpiar el listener de Firestore
       unsub();
-      
-      // Limpiar el listener de notificaciones de Electron si existe
-      if (notificationClickUnsubRef.current) {
-        notificationClickUnsubRef.current();
-        notificationClickUnsubRef.current = null;
-      }
     };
   }, [userData, location.pathname, processedMsgIds, navigate, showToast]); 
 

@@ -7,6 +7,17 @@ export default function Home() {
   
   const [updates, setUpdates] = useState([
     {
+      id: 1,
+      version: "v1.2.3",
+      date: "8 Abril, 2025",
+      title: "Bugs arreglados",
+      description: "Se ha arregaldo el bug:",
+      features: [
+        "No funciona al darle al querer escribir",
+        "ahora recibiras notificaciones al privado, mejorar el rendimiento de la app, y mas",
+      ]
+    },
+    {
       id: 2,
       version: "v1.2.1",
       date: "7 Abril, 2025",
