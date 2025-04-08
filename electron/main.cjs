@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, Notification, Menu, Tray, dialog } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
-const { setupBackgroundProcess } = require('./background-process.cjs'); // Importamos el módulo de proceso en segundo plano
+const { setupBackgroundProcess } = require('./background-process.cjs');
+const fs = require('fs');
 console.log("🟢 main.cjs cargado correctamente desde Electron");
 
 // Configuración mejorada de logger
@@ -58,17 +59,11 @@ function createWindow() {
   backgroundProcess = setupBackgroundProcess(mainWindow);
   log.info("🟢 Proceso en segundo plano configurado");
 
-  // Usar la bandeja del sistema del background-process si está disponible, o nuestra propia implementación
-  if (backgroundProcess && backgroundProcess.createTrayMenu) {
-    tray = backgroundProcess.createTrayMenu(mainWindow);
-    if (tray) {
-      log.info("🟢 Bandeja del sistema creada por background-process");
-    } else {
-      createTray();
-    }
-  } else {
+  // Crear el tray después de que la app esté lista
+  app.whenReady().then(() => {
     createTray();
-  }
+    log.info("Tray creation scheduled after app is ready");
+  });
   
   createAppMenu();
 
@@ -147,7 +142,9 @@ function createUpdatesWindow() {
     }
   });
   
-  updatesWindow.webContents.openDevTools({ mode: 'detach' });
+  if (isDev) {
+    updatesWindow.webContents.openDevTools({ mode: 'detach' });
+  }
   
   // No mostrar menú en la ventana de actualizaciones
   updatesWindow.setMenu(null);
@@ -208,48 +205,99 @@ function createAppMenu() {
   Menu.setApplicationMenu(menu); // Establecer nuestro menú personalizado
 }
 
+// Función mejorada para crear el tray
 function createTray() {
   try {
-    // Intenta con varias rutas posibles para el icono
-    const possiblePaths = [
+    log.info("⏳ Iniciando creación del tray...");
+    
+    // Si ya existe un tray, no crear uno nuevo
+    if (tray !== null) {
+      log.info("⚠️ Tray ya existe, no se creará uno nuevo");
+      return;
+    }
+    
+    // Lista de posibles rutas de iconos - MEJORADA y más robusta
+    const possibleIconPaths = [
+      // Rutas en producción
+      path.join(app.getAppPath(), 'dist/favicon.ico'),
+      path.join(app.getAppPath(), 'dist/raw.ico'),
+      path.join(app.getAppPath(), 'dist/icon.ico'),
+      path.join(app.getAppPath(), 'dist/icon.png'),
+      // Rutas de recursos en producción
+      path.join(app.getAppPath(), 'build/favicon.ico'),
+      path.join(app.getAppPath(), 'build/raw.ico'),
+      path.join(app.getAppPath(), 'build/icon.ico'),
+      path.join(app.getAppPath(), 'build/icon.png'),
+      // Rutas en desarrollo
+      path.join(app.getAppPath(), 'public/favicon.ico'),
+      path.join(app.getAppPath(), 'public/raw.ico'),
+      path.join(app.getAppPath(), 'public/icon.ico'),
+      path.join(app.getAppPath(), 'public/icon.png'),
+      // Rutas relativas
       path.join(__dirname, '../public/favicon.ico'),
       path.join(__dirname, '../public/raw.ico'),
       path.join(__dirname, '../public/icon.ico'),
       path.join(__dirname, '../public/icon.png'),
+      // Rutas absolutas
       path.join(__dirname, 'public/favicon.ico'),
-      path.join(__dirname, 'public/raw.ico')
+      path.join(__dirname, 'public/raw.ico'),
+      path.join(__dirname, 'public/icon.ico'),
+      path.join(__dirname, 'public/icon.png'),
+      // Recursos
+      path.join(__dirname, '../resources/favicon.ico'),
+      path.join(__dirname, '../resources/raw.ico'),
+      path.join(__dirname, '../resources/icon.ico'),
+      path.join(__dirname, '../resources/icon.png'),
     ];
 
+    // Encontrar el primer icono válido
     let iconPath = null;
-    for (const p of possiblePaths) {
-      if (require('fs').existsSync(p)) {
-        iconPath = p;
-        console.log(`✅ Icono encontrado en: ${p}`);
-        break;
+    
+    // Debug: mostrar rutas de búsqueda
+    log.info(`📁 Buscando iconos en ${possibleIconPaths.length} rutas posibles...`);
+    
+    for (const p of possibleIconPaths) {
+      log.info(`📁 Verificando: ${p}`);
+      
+      try {
+        if (fs.existsSync(p)) {
+          iconPath = p;
+          log.info(`✅ Icono encontrado en: ${p}`);
+          break;
+        }
+      } catch (err) {
+        log.warn(`⚠️ Error verificando ruta ${p}: ${err.message}`);
       }
     }
 
+    // Si no se encontró ningún icono, usar un icono genérico
     if (!iconPath) {
-      console.warn("⚠️ No se encontró ningún icono para la bandeja del sistema");
+      log.warn("⚠️ No se encontró ningún icono para la bandeja del sistema");
       
-      // En modo desarrollo, podemos simplemente omitir la bandeja del sistema
+      // En modo desarrollo, podemos usar un icono de Electron
       if (isDev) {
-        console.log("🔵 Modo desarrollo: continuando sin bandeja del sistema");
-        return; // Salimos sin crear la bandeja
+        const electronIconPath = path.join(require.resolve('electron'), '..', '..', 'dist', 'electron.ico');
+        if (fs.existsSync(electronIconPath)) {
+          iconPath = electronIconPath;
+          log.info(`✅ Usando icono de Electron: ${electronIconPath}`);
+        }
       }
       
-      // En producción, usamos un icono por defecto
-      const defaultIconPath = path.join(app.getAppPath(), 'resources', 'icon.png');
-      if (require('fs').existsSync(defaultIconPath)) {
-        iconPath = defaultIconPath;
-        console.log(`✅ Usando icono predeterminado: ${defaultIconPath}`);
-      } else {
-        console.error("❌ No se pudo encontrar ningún icono válido para la bandeja");
-        return; // Salimos sin crear la bandeja
+      // Si todavía no tenemos un icono, intentar usar un recurso interno
+      if (!iconPath) {
+        iconPath = app.getFileIcon ? app.getFileIcon(app.getPath('exe')) : null;
+        if (iconPath) {
+          log.info(`✅ Usando icono de la aplicación`);
+        } else {
+          // Si todo falla, no crear tray
+          log.error("❌ No se pudo encontrar ningún icono válido para la bandeja");
+          return;
+        }
       }
     }
 
     // Crear la bandeja con el icono encontrado
+    log.info(`🔨 Creando tray con icono: ${iconPath}`);
     tray = new Tray(iconPath);
     
     const contextMenu = Menu.buildFromTemplate([
@@ -263,7 +311,9 @@ function createTray() {
             if (backgroundProcess && backgroundProcess.restoreWindow) {
               backgroundProcess.restoreWindow();
             } else {
+              if (mainWindow.isMinimized()) mainWindow.restore();
               mainWindow.show();
+              mainWindow.focus();
             }
           }
         }
@@ -302,7 +352,9 @@ function createTray() {
         if (backgroundProcess && backgroundProcess.restoreWindow) {
           backgroundProcess.restoreWindow();
         } else {
+          if (mainWindow.isMinimized()) mainWindow.restore();
           mainWindow.show();
+          mainWindow.focus();
         }
       }
     });
@@ -319,8 +371,8 @@ function getCurrentVersion() {
   try {
     // Primero intenta obtener la versión desde package.json
     const packageJsonPath = path.join(app.getAppPath(), 'package.json');
-    if (require('fs').existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(require('fs').readFileSync(packageJsonPath, 'utf8'));
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
       if (packageJson.version && packageJson.version !== '0.0.0') {
         return packageJson.version;
       }
@@ -632,6 +684,7 @@ function setupAutoUpdater() {
   });
 }
 
+// INICIO PRINCIPAL DE LA APP - MODIFICADO PARA QUE FUNCIONE MEJOR
 app.whenReady().then(() => {
   // Prevenir múltiples instancias (parte del código de background-process integrado aquí)
   const gotTheLock = app.requestSingleInstanceLock();
@@ -654,20 +707,91 @@ app.whenReady().then(() => {
     }
   });
 
+  // Crear la ventana principal
   createWindow();
+  
+  // Configurar el auto updater
   setupAutoUpdater();
+  
+  // Crear el tray DESPUÉS de que la app esté lista
+  setTimeout(() => {
+    createTray();
+    log.info("🚀 Tray creation triggered after timeout");
+  }, 1000);  
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
+// Manejar eventos del ciclo de vida de la app
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    log.info("Todas las ventanas cerradas - pero manteniéndose en system tray");
+    // NO llamamos a app.quit() aquí para mantener la app en segundo plano con el tray
+  }
+});
+
+app.on('before-quit', () => {
+  log.info("App cerrándose completamente");
+  app.isQuitting = true;
+});
+
+app.on('quit', () => {
+  log.info("App cerrada completamente");
+  // Limpiar el tray al salir completamente
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
 
 // IPC handlers
-ipcMain.on('notification', (event, { title, body, payload = null }) => {
+ipcMain.on('get-app-version', (event) => {
+  event.returnValue = getCurrentVersion();
+});
+
+// Método explícito para obtener la versión de manera asíncrona
+ipcMain.handle('get-app-version-async', async () => {
+  try {
+    return getCurrentVersion();
+  } catch (error) {
+    log.error("Error al obtener versión:", error);
+    return '1.1.3'; // Fallback como último recurso
+  }
+});
+
+ipcMain.on('check-for-updates', () => {
+  checkForUpdates(true);
+});
+
+ipcMain.on('install-update', () => {
+  log.info("🔄 Instalando actualización...");
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.on('online-status-changed', (_, status) => {
+  log.info('Estado de conexión:', status);
+});
+
+// Nuevos manejadores para la ventana de actualizaciones
+ipcMain.on('get-updater-info', (event) => {
+  log.info("🔍 Solicitud de información de actualización");
+  const info = {
+    currentVersion: getCurrentVersion(),
+    lastCheck: updateInfo.lastCheck,
+    updateStatus: updateInfo.updateStatus,
+    updateData: updateInfo.updateData
+  };
+  log.info("🔍 Información de actualización:", info);
+  event.returnValue = info;
+});
+
+ipcMain.on('close-updates-window', () => {
+  if (updatesWindow) {
+    updatesWindow.close();
+  }
+});on('notification', (event, { title, body, payload = null }) => {
   log.info(`Mostrando notificación: ${title} - ${body}`);
   if (payload) {
     log.info(`Con payload adicional:`, payload);
@@ -692,7 +816,7 @@ ipcMain.on('notification', (event, { title, body, payload = null }) => {
        ];
     
        for (const p of possiblePaths) {
-        if (require('fs').existsSync(p)) {
+        if (fs.existsSync(p)) {
           iconPath = p;
           break;
         }
@@ -767,48 +891,4 @@ ipcMain.on('restore-window', () => {
   }
 });
 
-ipcMain.on('get-app-version', (event) => {
-  event.returnValue = getCurrentVersion();
-});
-
-// Método explícito para obtener la versión de manera asíncrona
-ipcMain.handle('get-app-version-async', async () => {
-  try {
-    return getCurrentVersion();
-  } catch (error) {
-    log.error("Error al obtener versión:", error);
-    return '1.1.3'; // Fallback como último recurso
-  }
-});
-
-ipcMain.on('check-for-updates', () => {
-  checkForUpdates(true);
-});
-
-ipcMain.on('install-update', () => {
-  log.info("🔄 Instalando actualización...");
-  autoUpdater.quitAndInstall(false, true);
-});
-
-ipcMain.on('online-status-changed', (_, status) => {
-  log.info('Estado de conexión:', status);
-});
-
-// Nuevos manejadores para la ventana de actualizaciones
-ipcMain.on('get-updater-info', (event) => {
-  log.info("🔍 Solicitud de información de actualización");
-  const info = {
-    currentVersion: getCurrentVersion(),
-    lastCheck: updateInfo.lastCheck,
-    updateStatus: updateInfo.updateStatus,
-    updateData: updateInfo.updateData
-  };
-  log.info("🔍 Información de actualización:", info);
-  event.returnValue = info;
-});
-
-ipcMain.on('close-updates-window', () => {
-  if (updatesWindow) {
-    updatesWindow.close();
-  }
-});
+backgroundProcess.restoreWindow();
