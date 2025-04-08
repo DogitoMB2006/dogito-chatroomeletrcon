@@ -24,6 +24,29 @@ export default function NotificationListener() {
   const location = useLocation();
   const navigate = useNavigate();
   const [processedMsgIds] = useState(new Set()); 
+  
+  // Montar un único manejador para navegación entre chats
+  useEffect(() => {
+    if (!isElectron) return;
+    
+    const handleNotificationClick = (event, payload) => {
+      if (payload && payload.route) {
+        console.log(`Notificación de mensaje privado clickeada, navegando a: ${payload.route}`);
+        navigate(payload.route);
+      }
+    };
+    
+    // Este manejador es solo una copia de seguridad por si el NotificationNavigator no funciona
+    if (window.electronAPI.onNotificationClick) {
+      const unsubscribe = window.electronAPI.onNotificationClick(handleNotificationClick);
+      
+      return () => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
+    }
+  }, [navigate]);
 
   useEffect(() => {
     if (!userData) return;
@@ -85,18 +108,20 @@ export default function NotificationListener() {
           if ((!isPageVisible || currentPath !== senderPath)) {
             // Si estamos en Electron, usar notificaciones nativas
             if (isElectron && window.electronAPI) {
-              console.log(`Enviando notificación Electron: ${notificationTitle} - ${messageText}`);
+              // CAMBIO CLAVE: Guardar la ruta en el payload para NotificationNavigator
+              const payload = { 
+                route: senderPath,
+                type: 'private',
+                from: msg.from 
+              };
               
-              // Usar la función correcta del API expuesto en preload.cjs
-              window.electronAPI.sendNotification(notificationTitle, messageText);
+              console.log(`Enviando notificación Electron con payload:`, payload);
               
-              // IMPORTANTE: Registrar un manejador específico para esta notificación
-              // Este es el enfoque que funciona en GroupNotificationListener
-              const finalSenderPath = senderPath; // Capturar en closure
-              window.electronAPI.onNotificationClick(() => {
-                console.log(`Navegando a chat privado: ${finalSenderPath}`);
-                navigate(finalSenderPath);
-              });
+              // Usar la función sendNotification de ipcMain con el payload
+              window.electronAPI.sendNotification(notificationTitle, messageText, payload);
+              
+              // Ya no registramos manejadores adicionales, dejamos que NotificationNavigator se encargue
+              // Esto evita sobrescribir los manejadores existentes
             }
             // Si no estamos en Electron, usar el sistema de notificaciones del navegador
             else if (Notification.permission === 'granted' && 

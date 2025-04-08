@@ -29,24 +29,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
-  // Método único para enviar notificaciones (más consistente)
-  sendNotification: (title, body) => {
-    if (isElectron()) {
-      ipcRenderer.send('notification', { title, body });
-    } else {
-      console.warn('Función de notificación no disponible fuera de Electron');
-    }
-  },
+// Método único para enviar notificaciones (más consistente)
+sendNotification: (title, body, payload = null) => {
+  if (isElectron()) {
+    // Enviar el título, cuerpo y payload adicional con la ruta de navegación
+    ipcRenderer.send('notification', { title, body, payload });
+  } else {
+    console.warn('Función de notificación no disponible fuera de Electron');
+  }
+},
   
-  // Método único para manejar clicks en notificaciones
-  onNotificationClick: (callback) => {
-    if (isElectron()) {
-      const handler = () => callback();
-      ipcRenderer.on('notification-clicked', handler);
-      return () => ipcRenderer.removeListener('notification-clicked', handler);
-    }
-    return () => {}; // Función vacía para entornos no-Electron
-  },
+// Método único para manejar clicks en notificaciones
+onNotificationClick: (callback) => {
+  if (isElectron()) {
+    // Este manejador ahora pasa tanto el evento como el payload recibido
+    const handler = (_, payload) => callback(_, payload);
+    ipcRenderer.on('notification-clicked', handler);
+    return () => ipcRenderer.removeListener('notification-clicked', handler);
+  }
+  return () => {}; // Función vacía para entornos no-Electron
+},
   
   // Navegación
   navigation: {
