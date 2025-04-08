@@ -1,12 +1,13 @@
-import { useState, useContext, useCallback } from "react";
+import { useState, useContext, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import { AuthContext } from "../context/AuthContext";
 import { auth, db } from "../firebase/config";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { storage } from "../firebase/config"; 
 import { useNavigate } from "react-router-dom";
-import { MdArrowBack, MdPhoto, MdLink, MdCrop, MdClose } from "react-icons/md";
+import { MdArrowBack, MdPhoto, MdLink, MdCrop, MdClose, MdPerson, MdCheck } from "react-icons/md";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
 
 // Helper function to crop image
 const getCroppedImg = (imageSrc, pixelCrop) => {
@@ -96,17 +97,67 @@ export default function EditProfile() {
   const [originalPreviewURL, setOriginalPreviewURL] = useState(userData?.photoURL || null);
   const [previewURL, setPreviewURL] = useState(userData?.photoURL || null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('local'); // 'local' o 'url'
   const [imageUrl, setImageUrl] = useState('');
   const [urlError, setUrlError] = useState('');
   const [isGif, setIsGif] = useState(false);
 
+  // Username update states
+  const [username, setUsername] = useState(userData?.username || '');
+  const [originalUsername] = useState(userData?.username || '');
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState(true);
+  const [usernameChanged, setUsernameChanged] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
+  const [showUsernameField, setShowUsernameField] = useState(false);
+
   // Crop states
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [showCropper, setShowCropper] = useState(false);
+
+  // Verificar disponibilidad del nombre de usuario
+  useEffect(() => {
+    // Si no ha cambiado o es el mismo que el original, no verificar
+    if (username === originalUsername || !usernameChanged) {
+      setUsernameAvailable(true);
+      setUsernameError('');
+      return;
+    }
+
+    // Validar longitud mínima
+    if (username.length < 3) {
+      setUsernameAvailable(false);
+      setUsernameError('El nombre debe tener al menos 3 caracteres');
+      return;
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setCheckingUsername(true);
+      try {
+        const q = query(collection(db, "users"), where("username", "==", username));
+        const snapshot = await getDocs(q);
+        const isAvailable = snapshot.empty;
+        setUsernameAvailable(isAvailable);
+        setUsernameError(isAvailable ? '' : 'Este nombre de usuario ya está en uso');
+      } catch (err) {
+        console.error("Error al verificar nombre de usuario:", err);
+        setUsernameError('Error al verificar disponibilidad');
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 700); 
+    
+    return () => clearTimeout(delayDebounce);
+  }, [username, originalUsername, usernameChanged]);
+
+  // Detectar cambios en el nombre de usuario
+  useEffect(() => {
+    setUsernameChanged(username !== originalUsername);
+  }, [username, originalUsername]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -193,48 +244,80 @@ export default function EditProfile() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!previewURL) return;
+  const handleToggleUsernameField = () => {
+    setShowUsernameField(!showUsernameField);
+  };
+
+  const handleUsernameChange = (e) => {
+    setUsername(e.target.value);
+  };
+
+  const handleSave = async () => {
+    // Verificar si hay cambios
+    const profileChanged = previewURL !== userData?.photoURL || (usernameChanged && usernameAvailable);
+    
+    if (!profileChanged) {
+      navigate("/chat");
+      return;
+    }
+
     setLoading(true);
+    setError('');
 
     try {
-      let finalPhotoUrl;
+      const userRef = doc(db, "users", user.uid);
+      let finalPhotoUrl = userData?.photoURL;
+      let updateData = {};
 
-      // Si estamos usando una URL (y especialmente si es un GIF)
-      if (activeTab === 'url') {
-        // Guardar directamente la URL externa
-        finalPhotoUrl = previewURL;
-      } else {
-        // Subida normal a Firebase Storage
-        const response = await fetch(previewURL);
-        const blob = await response.blob();
+      // Actualizar foto de perfil si ha cambiado
+      if (previewURL !== userData?.photoURL) {
+        // Si estamos usando una URL (y especialmente si es un GIF)
+        if (activeTab === 'url') {
+          // Guardar directamente la URL externa
+          finalPhotoUrl = previewURL;
+        } else {
+          // Subida normal a Firebase Storage
+          const response = await fetch(previewURL);
+          const blob = await response.blob();
 
-        // Upload to Firebase
-        const storageRef = ref(storage, `profileImages/${user.uid}`);
-        await uploadBytes(storageRef, blob);
-        finalPhotoUrl = await getDownloadURL(storageRef);
+          // Upload to Firebase
+          const storageRef = ref(storage, `profileImages/${user.uid}`);
+          await uploadBytes(storageRef, blob);
+          finalPhotoUrl = await getDownloadURL(storageRef);
+        }
+        
+        updateData.photoURL = finalPhotoUrl;
       }
 
-      // Update user document
-      await updateDoc(doc(db, "users", user.uid), {
-        photoURL: finalPhotoUrl
-      });
+      // Actualizar nombre de usuario si ha cambiado y está disponible
+      if (usernameChanged && usernameAvailable) {
+        updateData.username = username;
+      }
+
+      // Update user document with all changes
+      await updateDoc(userRef, updateData);
 
       // Update local userData state so it reflects immediately across the app
       if (userData) {
         const updatedUserData = {
           ...userData,
-          photoURL: finalPhotoUrl
+          ...updateData
         };
         
         // Update the AuthContext with the new user data
         setUserData(updatedUserData);
       }
 
-      alert("Foto actualizada correctamente");
+      // Mostrar mensaje de éxito
+      const whatChanged = [];
+      if (updateData.photoURL) whatChanged.push('foto');
+      if (updateData.username) whatChanged.push('nombre de usuario');
+      alert(`Se ha actualizado correctamente tu ${whatChanged.join(' y ')}`);
+      
       navigate("/chat");
     } catch (error) {
-      alert("Error al actualizar imagen: " + error.message);
+      alert("Error al actualizar perfil: " + error.message);
+      setError("Error al actualizar perfil: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -308,7 +391,71 @@ export default function EditProfile() {
 
       <div className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg w-full max-w-md">
-          <h2 className="text-xl font-bold mb-6 text-gray-100 text-center">Actualizar foto de perfil</h2>
+          <h2 className="text-xl font-bold mb-6 text-gray-100 text-center">Actualizar perfil</h2>
+
+          {/* Mostrar error si existe */}
+          {error && (
+            <div className="bg-red-900/30 text-red-400 px-4 py-3 rounded-lg text-sm border border-red-800 mb-4">
+              {error}
+            </div>
+          )}
+
+          {/* Sección de nombre de usuario */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-semibold text-gray-200">Nombre de usuario</h3>
+              <button 
+                onClick={handleToggleUsernameField}
+                className="text-indigo-400 hover:text-indigo-300 text-sm"
+              >
+                {showUsernameField ? 'Cancelar' : 'Editar'}
+              </button>
+            </div>
+
+            {showUsernameField ? (
+              <div className="space-y-2">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MdPerson className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={handleUsernameChange}
+                    placeholder="Nuevo nombre de usuario"
+                    className="bg-gray-700 border border-gray-600 text-gray-100 placeholder-gray-400 focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 pr-10 py-3 rounded-lg"
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    {checkingUsername && (
+                      <AiOutlineLoading3Quarters className="animate-spin h-5 w-5 text-gray-400" />
+                    )}
+                    {!checkingUsername && usernameAvailable && username.length >= 3 && usernameChanged && (
+                      <MdCheck className="h-5 w-5 text-green-500" />
+                    )}
+                    {!checkingUsername && !usernameAvailable && (
+                      <MdClose className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                </div>
+                {usernameError && (
+                  <p className="text-red-400 text-xs">{usernameError}</p>
+                )}
+                {username.length > 0 && username.length < 3 && (
+                  <p className="text-red-400 text-xs">Mínimo 3 caracteres</p>
+                )}
+                {usernameAvailable && username.length >= 3 && usernameChanged && !usernameError && (
+                  <p className="text-green-400 text-xs">Nombre disponible</p>
+                )}
+                {!usernameChanged && (
+                  <p className="text-gray-400 text-xs">Ingresa un nombre diferente al actual</p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-gray-700 py-3 px-4 rounded-lg">
+                <span className="text-gray-200">{userData?.username}</span>
+              </div>
+            )}
+          </div>
 
           {/* Preview de la imagen */}
           <div className="relative w-40 h-40 mx-auto rounded-full bg-gray-700 mb-6 overflow-hidden group">
@@ -432,8 +579,8 @@ export default function EditProfile() {
           {/* Botones de acción */}
           <div className="flex flex-col gap-3">
             <button
-              onClick={handleUpload}
-              disabled={loading || !previewURL}
+              onClick={handleSave}
+              disabled={loading || (usernameChanged && !usernameAvailable)}
               className="bg-indigo-600 text-white px-4 py-3 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? (
@@ -444,7 +591,7 @@ export default function EditProfile() {
                   </svg>
                   Actualizando...
                 </span>
-              ) : "Guardar foto de perfil"}
+              ) : "Guardar cambios"}
             </button>
             
             <button
@@ -457,7 +604,7 @@ export default function EditProfile() {
         </div>
         
         <div className="mt-6 text-gray-400 text-sm text-center">
-          <p>Elige entre subir una imagen o usar una URL externa.</p>
+          <p>Puedes actualizar tu nombre de usuario y foto de perfil.</p>
           <p>Los GIFs animados solo están disponibles usando URLs.</p>
         </div>
       </div>

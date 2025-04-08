@@ -24,42 +24,6 @@ export default function NotificationListener() {
   const location = useLocation();
   const navigate = useNavigate();
   const [processedMsgIds] = useState(new Set()); 
-  const pendingNavigationRef = useRef(null);
-  
-  // Referencia para la limpieza de event listeners
-  const notificationClickUnsubRef = useRef(null);
-
-  // Configurar un manejador global para las notificaciones en Electron
-  useEffect(() => {
-    if (!isElectron || !window.electronAPI) return;
-    
-    console.log("Configurando manejador global de clics en notificaciones para mensajes privados");
-    
-    // Registrar el listener para clicks en notificaciones
-    const unsubNotifClick = window.electronAPI.onNotificationClick(() => {
-      console.log("Notificación de mensaje privado clickeada");
-      
-      if (pendingNavigationRef.current) {
-        console.log(`Navegando a: ${pendingNavigationRef.current}`);
-        navigate(pendingNavigationRef.current);
-        pendingNavigationRef.current = null;
-      } else {
-        console.log("No hay ruta de navegación pendiente");
-      }
-    });
-    
-    // Guardar la función de limpieza
-    notificationClickUnsubRef.current = unsubNotifClick;
-    
-    // Limpiar al desmontar
-    return () => {
-      if (unsubNotifClick) {
-        console.log("Limpiando manejador de clics en notificaciones");
-        unsubNotifClick();
-        notificationClickUnsubRef.current = null;
-      }
-    };
-  }, [navigate]);
 
   useEffect(() => {
     if (!userData) return;
@@ -123,14 +87,16 @@ export default function NotificationListener() {
             if (isElectron && window.electronAPI) {
               console.log(`Enviando notificación Electron: ${notificationTitle} - ${messageText}`);
               
-              // IMPORTANTE: Guardar la ruta de navegación para usarla cuando se haga clic en la notificación
-              pendingNavigationRef.current = senderPath;
-              
               // Usar la función correcta del API expuesto en preload.cjs
               window.electronAPI.sendNotification(notificationTitle, messageText);
               
-              // Ya no registramos un nuevo manejador para cada notificación
-              // El manejador global configurado anteriormente se encargará de la navegación
+              // IMPORTANTE: Registrar un manejador específico para esta notificación
+              // Este es el enfoque que funciona en GroupNotificationListener
+              const finalSenderPath = senderPath; // Capturar en closure
+              window.electronAPI.onNotificationClick(() => {
+                console.log(`Navegando a chat privado: ${finalSenderPath}`);
+                navigate(finalSenderPath);
+              });
             }
             // Si no estamos en Electron, usar el sistema de notificaciones del navegador
             else if (Notification.permission === 'granted' && 
