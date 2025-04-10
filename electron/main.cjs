@@ -22,6 +22,17 @@ let updateInfo = {
 const appVersion = app.getVersion();
 const isDev = process.env.NODE_ENV === 'development';
 
+// Función centralizada para restaurar la ventana
+function restoreWindow() {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+    return true;
+  }
+  return false;
+}
+
 function createWindow() {
   // ❌ Eliminar menú predeterminado de Electron ANTES de crear la ventana
   Menu.setApplicationMenu(null);
@@ -67,22 +78,20 @@ function createWindow() {
   
   createAppMenu();
 
-  // Ya no necesitamos el handler de 'close' aquí, se maneja en background-process
-  // Solo mantenemos el evento 'closed'
+  // Comportamiento al cerrar: Minimizar directamente al system tray sin diálogo
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      // Minimizar directamente a la bandeja del sistema sin mostrar diálogo
+      mainWindow.hide();
+      return false;
+    }
+  });
+
+  // Evento cuando la ventana se cierra completamente
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-
-  // Si por alguna razón no tenemos background-process, mantenemos el comportamiento original
-  if (!backgroundProcess) {
-    mainWindow.on('close', (event) => {
-      if (!app.isQuitting) {
-        event.preventDefault();
-        mainWindow.hide();
-        return false;
-      }
-    });
-  }
 }
 
 // Función para crear la ventana de actualizaciones
@@ -304,18 +313,7 @@ function createTray() {
       {
         label: 'Abrir Dogito Chat',
         click: () => {
-          if (mainWindow === null) {
-            createWindow();
-          } else {
-            // Usar la función de restauración del background-process si está disponible
-            if (backgroundProcess && backgroundProcess.restoreWindow) {
-              backgroundProcess.restoreWindow();
-            } else {
-              if (mainWindow.isMinimized()) mainWindow.restore();
-              mainWindow.show();
-              mainWindow.focus();
-            }
-          }
+          restoreWindow();
         }
       },
       {
@@ -344,19 +342,9 @@ function createTray() {
     tray.setToolTip(`Dogito Chat v${getCurrentVersion()}`);
     tray.setContextMenu(contextMenu);
 
+    // Usar nuestra función centralizada de restauración
     tray.on('click', () => {
-      if (mainWindow === null) {
-        createWindow();
-      } else {
-        // Usar la función de restauración del background-process si está disponible
-        if (backgroundProcess && backgroundProcess.restoreWindow) {
-          backgroundProcess.restoreWindow();
-        } else {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      }
+      restoreWindow();
     });
     
     log.info("🟢 Bandeja del sistema creada con éxito");
@@ -697,13 +685,7 @@ app.whenReady().then(() => {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     // Alguien intentó ejecutar una segunda instancia
     if (mainWindow) {
-      if (backgroundProcess && backgroundProcess.restoreWindow) {
-        backgroundProcess.restoreWindow();
-      } else {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      restoreWindow();
     }
   });
 
@@ -791,6 +773,7 @@ ipcMain.on('close-updates-window', () => {
   }
 });
 
+// Manejador mejorado de notificaciones
 ipcMain.on('notification', (event, { title, body, payload = null }) => {
   log.info(`Mostrando notificación: ${title} - ${body}`);
   if (payload) {
@@ -826,37 +809,43 @@ ipcMain.on('notification', (event, { title, body, payload = null }) => {
       title: title || 'Notificación',
       body: body || '',
       icon: iconPath || undefined,
-      silent: false // Hacer que suene
+      silent: false, // Hacer que suene
+      urgency: 'critical' // Añadir prioridad alta para asegurar que se muestre
     });
     
     notification.show();
     
     // Evento cuando se hace clic en la notificación
     notification.on('click', () => {
-      // Mostrar y enfocar la ventana principal
-      if (mainWindow) {
-        // Usar la función de restauración del background-process si está disponible
-        if (backgroundProcess && backgroundProcess.restoreWindow) {
-          backgroundProcess.restoreWindow();
-        } else {
-          if (!mainWindow.isVisible()) {
-            mainWindow.show();
-          }
-          if (mainWindow.isMinimized()) {
-            mainWindow.restore();
-          }
-          mainWindow.focus();
-        }
-        
-        // Enviar el evento a la ventana del navegador, INCLUYENDO EL PAYLOAD
+      log.info(`Notificación clickeada: ${title}`);
+      
+      // Primero: restaurar la ventana para asegurar visibilidad
+      restoreWindow();
+      log.info("Ventana restaurada desde notificación");
+      
+      // Segundo: enviar el payload a la ventana para manejo adicional
+      if (mainWindow && mainWindow.webContents) {
+        log.info(`Enviando payload de notificación a frontend: ${JSON.stringify(payload)}`);
         mainWindow.webContents.send('notification-clicked', payload);
-        
-        // Responder al evento para que el remitente sepa que fue procesado
-        if (event.sender) {
-          event.sender.send('notification-clicked-response', { success: true, payload });
-        }
+      }
+      
+      // Responder al evento para que el remitente sepa que fue procesado
+      if (event.sender) {
+        event.sender.send('notification-clicked-response', { success: true, payload });
       }
     });
+    
+    // Para debugging, registrar cuando se cierra la notificación
+    notification.on('close', () => {
+      log.info(`Notificación cerrada: ${title}`);
+    });
+    
+    // Devolver alguna respuesta al remitente
+    if (event.sender) {
+      event.sender.send('notification-sent', { success: true });
+    }
+    
+    return notification;
   } catch (error) {
     log.error("❌ Error al mostrar notificación:", error);
     
@@ -864,30 +853,22 @@ ipcMain.on('notification', (event, { title, body, payload = null }) => {
     if (event.sender) {
       event.sender.send('notification-error', { error: error.message });
     }
+    return null;
   }
 });
 
+// Agregar un manejador explícito para restaurar la ventana
+ipcMain.on('restore-window', () => {
+  log.info("Solicitud explícita para restaurar ventana recibida");
+  restoreWindow();
+});
+
+// Manejador para la navegación desde notificaciones
 ipcMain.on('navigate-to', (_, route) => {
   if (mainWindow) {
-    // Usar la función de restauración del background-process si está disponible
-    if (backgroundProcess && backgroundProcess.restoreWindow) {
-      backgroundProcess.restoreWindow();
-    } else {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    // Primero restaurar la ventana
+    restoreWindow();
+    // Luego enviar el evento de navegación
     mainWindow.webContents.send('navigate-to-route', route);
   }
 });
-
-// Agregar manejador para restaurar la ventana desde otros procesos
-ipcMain.on('restore-window', () => {
-  if (backgroundProcess && backgroundProcess.restoreWindow) {
-    backgroundProcess.restoreWindow();
-  } else if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  }
-});
-

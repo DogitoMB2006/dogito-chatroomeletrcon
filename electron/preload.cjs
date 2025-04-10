@@ -29,26 +29,56 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   
-// Método único para enviar notificaciones (más consistente)
-sendNotification: (title, body, payload = null) => {
-  if (isElectron()) {
-    // Enviar el título, cuerpo y payload adicional con la ruta de navegación
-    ipcRenderer.send('notification', { title, body, payload });
-  } else {
-    console.warn('Función de notificación no disponible fuera de Electron');
-  }
-},
+  // Método para restaurar la ventana explícitamente (para notificaciones)
+  restoreWindow: () => {
+    if (isElectron()) {
+      ipcRenderer.send('restore-window');
+      return true;
+    }
+    return false;
+  },
   
-// Método único para manejar clicks en notificaciones
-onNotificationClick: (callback) => {
-  if (isElectron()) {
-    // Este manejador ahora pasa tanto el evento como el payload recibido
-    const handler = (_, payload) => callback(_, payload);
-    ipcRenderer.on('notification-clicked', handler);
-    return () => ipcRenderer.removeListener('notification-clicked', handler);
-  }
-  return () => {}; // Función vacía para entornos no-Electron
-},
+  // Método único para enviar notificaciones (más consistente)
+  sendNotification: (title, body, payload = null) => {
+    if (isElectron()) {
+      // Enviar el título, cuerpo y payload adicional con la ruta de navegación
+      ipcRenderer.send('notification', { title, body, payload });
+      
+      // Devolver un objeto con métodos adicionales
+      return {
+        // Método para abrir explícitamente la ventana cuando se muestra la notificación
+        restoreWindowOnClick: () => {
+          console.log("Configurando restauración automática al hacer clic en notificación");
+          const unsubscribe = ipcRenderer.once('notification-clicked', () => {
+            console.log("Notificación clickeada, restaurando ventana...");
+            ipcRenderer.send('restore-window');
+          });
+          return unsubscribe;
+        }
+      };
+    } else {
+      console.warn('Función de notificación no disponible fuera de Electron');
+      return { restoreWindowOnClick: () => {} };
+    }
+  },
+  
+  // También podemos mejorar el método onNotificationClick para incluir la restauración
+  onNotificationClick: (callback) => {
+    if (isElectron()) {
+      // Este manejador ahora hace dos cosas:
+      // 1. Restaura la ventana automáticamente
+      // 2. Llama al callback proporcionado
+      const handler = (_, payload) => {
+        // Primero restauramos la ventana
+        ipcRenderer.send('restore-window');
+        // Luego llamamos al callback con el payload
+        callback(_, payload);
+      };
+      ipcRenderer.on('notification-clicked', handler);
+      return () => ipcRenderer.removeListener('notification-clicked', handler);
+    }
+    return () => {}; // Función vacía para entornos no-Electron
+  },
   
   // Navegación
   navigation: {

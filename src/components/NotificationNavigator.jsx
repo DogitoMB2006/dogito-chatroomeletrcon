@@ -21,8 +21,20 @@ export default function NotificationNavigator() {
       if (payload && payload.route) {
         console.log(`NotificationNavigator: Navegando a ruta: ${payload.route}`);
         navigate(payload.route);
+      } else if (payload && payload.chatId) {
+        // Soporte para formato específico de notificaciones de chat
+        const route = `/chat/${payload.chatId}`;
+        console.log(`NotificationNavigator: Navegando a chat: ${route}`);
+        navigate(route);
+      } else if (payload && payload.groupId) {
+        // Soporte para formato específico de notificaciones de grupo
+        const route = `/chat/group/${payload.groupId}`;
+        console.log(`NotificationNavigator: Navegando a grupo: ${route}`);
+        navigate(route);
       } else {
-        console.warn("NotificationNavigator: No hay ruta especificada en el payload de la notificación");
+        // Si no hay ruta específica, navegamos a /chat como fallback
+        console.log("NotificationNavigator: No hay ruta específica, navegando a /chat");
+        navigate('/chat');
       }
     };
     
@@ -45,6 +57,16 @@ export default function NotificationNavigator() {
     
     document.addEventListener('electron-navigate', handleElectronNavigate);
     console.log("NotificationNavigator: Evento electron-navigate registrado");
+
+    // Manejar la navegación desde el main process
+    const handleNavigateTo = (_, route) => {
+      console.log(`NotificationNavigator: Recibido evento navigate-to-route: ${route}`);
+      navigate(route);
+    };
+    
+    if (window.electronAPI.navigation && window.electronAPI.navigation.onNavigateTo) {
+      window.electronAPI.navigation.onNavigateTo(handleNavigateTo);
+    }
     
     // Función de limpieza
     return () => {

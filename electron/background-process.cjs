@@ -16,25 +16,9 @@ function setupBackgroundProcess(mainWindow) {
     if (!app.isQuitting) {
       event.preventDefault();
       
-      // Mostrar un diálogo para confirmar el cierre
-      const shouldClose = dialog.showMessageBoxSync(mainWindow, {
-        type: 'question',
-        buttons: ['Minimizar', 'Salir'],
-        title: 'Dogito Chat',
-        message: '¿Qué deseas hacer con la aplicación?',
-        defaultId: 0,
-        cancelId: 1
-      });
-
-      if (shouldClose === 0) {
-        // Minimizar a la bandeja del sistema
-        mainWindow.hide();
-        return false;
-      } else {
-        // Cerrar completamente
-        app.isQuitting = true;
-        app.quit();
-      }
+      // Minimizar directamente a la bandeja del sistema sin mostrar diálogo
+      mainWindow.hide();
+      return false;
     }
   });
 
