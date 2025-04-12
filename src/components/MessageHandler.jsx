@@ -27,6 +27,9 @@ import { MdDelete, MdReply, MdBlock, MdKeyboardArrowDown } from "react-icons/md"
 import { toast } from "react-toastify";
 
 // Componentes
+import Staff from "../components/Staff";
+
+// Importar componentes de mensajes
 import {
   MessageInput,
   ReplyPreview,
@@ -35,7 +38,6 @@ import {
   BlockedMessageInput,
   CantSendMessage
 } from "../components/messages";
-import Staff from "../components/Staff";
 
 export default function MessageHandler({ receiver, isBlocked }) {
   const { userData } = useContext(AuthContext);
