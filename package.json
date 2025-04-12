@@ -79,7 +79,10 @@
       {
         "from": "public",
         "to": ".",
-        "filter": ["*.ico", "*.png"]
+        "filter": [
+          "*.ico",
+          "*.png"
+        ]
       }
     ],
     "win": {
@@ -115,7 +118,8 @@
         "deb"
       ],
       "category": "Network;Chat",
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "maintainer": "Dogito <dogitochat@gmail.com>"
     }
   }
 }

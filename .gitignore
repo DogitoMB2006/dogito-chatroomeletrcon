@@ -22,7 +22,8 @@ release/win-unpacked/
 release/Dogito\ Chat\ Setup\ *
 release/win-unpacked/Dogito\ Chat.exe
 release/win-unpacked/resources/app.asar
-
+deploy-electron.bat
+deploy-linux.sh
 # Vite build output
 /dist
 /dist-ssr
