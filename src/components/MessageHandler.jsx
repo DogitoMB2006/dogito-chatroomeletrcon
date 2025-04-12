@@ -14,7 +14,8 @@ import {
   onSnapshot,
   deleteDoc,
   serverTimestamp,
-  addDoc
+  addDoc,
+  limit
 } from "firebase/firestore";
 import {
   ref,
@@ -50,12 +51,14 @@ export default function MessageHandler({ receiver, isBlocked }) {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
   const [text, setText] = useState("");
+  const [isUserAtBottomState, setIsUserAtBottomState] = useState(true);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const isMountedRef = useRef(true);
   const lastMessageCountRef = useRef(0);
   const navigate = useNavigate();
+  const previousMessagesLengthRef = useRef(0);
 
   // Obtener datos del receptor
   useEffect(() => {
@@ -71,84 +74,111 @@ export default function MessageHandler({ receiver, isBlocked }) {
       }
     };
     getReceiverData();
+
+    // Limpieza al desmontar
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [receiver]);
 
-  // Listener para mensajes
+  // Listener para mensajes - OPTIMIZADO Y CORREGIDO
   useEffect(() => {
-    if (!userData) return;
+    if (!userData || !receiver) return;
 
-    const messagesRef = collection(db, "messages");
-    const q = query(
-      messagesRef,
-      where("participants", "array-contains", userData.username),
+    // Crear consulta que incluya ambas direcciones de mensajes
+    const q1 = query(
+      collection(db, "messages"),
+      where("from", "==", userData.username),
+      where("to", "==", receiver),
       orderBy("timestamp", "asc")
     );
 
-    const unsub = onSnapshot(q, async (snapshot) => {
+    const q2 = query(
+      collection(db, "messages"),
+      where("from", "==", receiver),
+      where("to", "==", userData.username),
+      orderBy("timestamp", "asc")
+    );
+
+    // Combinar los resultados de ambas consultas
+    const unsubscribe1 = onSnapshot(q1, (snapshot1) => {
       if (!isMountedRef.current) return;
       
-      const filtered = [];
-      const unreadMessages = [];
-
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-
-        const isBetween =
-          (data.from === userData.username && data.to === receiver) ||
-          (data.from === receiver && data.to === userData.username);
-
-        if (isBetween) {
-          if (data.to === userData.username && !data.read && !isBlocked) {
-            unreadMessages.push(docSnap.id);
-          }
-
-          filtered.push({ ...data, id: docSnap.id });
-        }
-      }
-
-      setMessages(filtered);
+      // Establecer mensajes del primer query
+      const messagesFromUser = snapshot1.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
       
-      // Verificar si hay nuevos mensajes para mostrar contador
-      if (filtered.length > lastMessageCountRef.current) {
-        const newMessages = filtered.slice(lastMessageCountRef.current);
-        const incomingMessages = newMessages.filter(msg => msg.from === receiver);
+      // Obtener mensajes al receptor para combinarlos
+      const unsubscribe2 = onSnapshot(q2, (snapshot2) => {
+        if (!isMountedRef.current) return;
         
-        if (incomingMessages.length > 0 && !isUserAtBottom()) {
-          setNewMessageCount(prev => prev + incomingMessages.length);
+        const messagesToUser = snapshot2.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        }));
+        
+        // Combinar y ordenar todos los mensajes por timestamp
+        const allMessages = [...messagesFromUser, ...messagesToUser].sort((a, b) => {
+          // Manejar mensajes sin timestamp (posiblemente en progreso de envío)
+          if (!a.timestamp && !b.timestamp) return 0;
+          if (!a.timestamp) return 1;  // Poner mensajes sin timestamp al final
+          if (!b.timestamp) return -1;
+          
+          return a.timestamp.seconds - b.timestamp.seconds;
+        });
+        
+        // Actualizar el estado con todos los mensajes
+        setMessages(allMessages);
+        
+        // Si hay nuevos mensajes y son del receptor, incrementar contador si no estamos al final
+        if (allMessages.length > previousMessagesLengthRef.current) {
+          const newMessages = allMessages.slice(previousMessagesLengthRef.current);
+          const incomingMessages = newMessages.filter(msg => msg.from === receiver);
+          
+          if (incomingMessages.length > 0 && !isUserAtBottom()) {
+            setNewMessageCount(prev => prev + incomingMessages.length);
+          } else if (
+            allMessages.length > 0 && 
+            allMessages[allMessages.length - 1].from === userData.username
+          ) {
+            // Si el último mensaje es nuestro, scroll al final
+            scrollToBottom();
+          }
         }
-      }
-      
-      // Actualizar referencia de contador
-      lastMessageCountRef.current = filtered.length;
-      
-      // Marcar mensajes como leídos (en segundo plano), pero solo si no hay bloqueo
-      if (unreadMessages.length > 0 && !isBlocked) {
-        // Ejecutar en segundo plano sin afectar la experiencia del usuario
-        setTimeout(() => {
-          if (!isMountedRef.current) return;
-          
-          const batch = writeBatch(db);
-          
-          unreadMessages.forEach((msgId) => {
-            batch.update(doc(db, "messages", msgId), { read: true });
-          });
-          
-          batch.commit().catch(err => console.error("Error al marcar mensajes como leídos:", err));
-        }, 500);
-      }
-      
-      // Scroll al final en el mensaje inicial o si es nuestro último mensaje
-      if (filtered.length > 0) {
-        const lastMessage = filtered[filtered.length - 1];
-        if (filtered.length === 1 || lastMessage.from === userData.username) {
-          scrollToBottom();
+        
+        // Actualizar la referencia para la próxima comparación
+        previousMessagesLengthRef.current = allMessages.length;
+        
+        // Marcar mensajes como leídos (en segundo plano)
+        if (!isBlocked) {
+          const unreadMessages = messagesToUser.filter(msg => !msg.read);
+          if (unreadMessages.length > 0) {
+            markMessagesAsRead(unreadMessages);
+          }
         }
-      }
+      });
+      
+      // Limpiar el segundo listener cuando se desmonte el componente
+      return () => unsubscribe2();
     });
 
+    // Función para marcar mensajes como leídos en batch
+    const markMessagesAsRead = async (messagesToMark) => {
+      try {
+        const batch = writeBatch(db);
+        messagesToMark.forEach(msg => {
+          batch.update(doc(db, "messages", msg.id), { read: true });
+        });
+        await batch.commit();
+      } catch (error) {
+        console.error("Error al marcar mensajes como leídos:", error);
+      }
+    };
+
     return () => {
-      unsub();
-      isMountedRef.current = false;
+      unsubscribe1();
     };
   }, [userData, receiver, isBlocked]);
 
@@ -164,6 +194,9 @@ export default function MessageHandler({ receiver, isBlocked }) {
       // Mostrar botón de scroll si no estamos cerca del final
       setShowScrollToBottom(distanceFromBottom > 100);
       
+      // Actualizar si el usuario está al final
+      setIsUserAtBottomState(distanceFromBottom < 50);
+      
       // Si llegamos al final, resetear contador de mensajes nuevos
       if (distanceFromBottom < 50) {
         setNewMessageCount(0);
@@ -171,15 +204,33 @@ export default function MessageHandler({ receiver, isBlocked }) {
     };
     
     container.addEventListener('scroll', handleScroll);
+    
+    // Hacer scroll al final al montar el componente
+    scrollToBottom();
+    
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Hacer scroll al final cuando cambie la lista de mensajes
+  useEffect(() => {
+    // Scroll al final solo si estamos en el fondo o si el último mensaje es nuestro
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (
+        isUserAtBottomState || 
+        (lastMessage && lastMessage.from === userData?.username)
+      ) {
+        scrollToBottom();
+      }
+    }
+  }, [messages, isUserAtBottomState, userData?.username]);
 
   // Verificar si el usuario está al final del chat
   const isUserAtBottom = () => {
     if (!messagesContainerRef.current) return true;
     
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    return scrollHeight - scrollTop - clientHeight < 100;
+    return scrollHeight - scrollTop - clientHeight < 50;
   };
 
   // Scroll al final de los mensajes
@@ -192,7 +243,7 @@ export default function MessageHandler({ receiver, isBlocked }) {
     });
   };
 
-  // Enviar mensaje
+  // Enviar mensaje - MEJORADO
   const handleSend = async () => {
     if (text.trim() === '' && !image) return;
     if (isBlocked) {
@@ -204,12 +255,14 @@ export default function MessageHandler({ receiver, isBlocked }) {
       let imageUrl = null;
 
       if (image) {
-        const imageRef = ref(storage, `chatImages/${Date.now()}-${image.name}`);
+        const storageFileName = `${Date.now()}-${image.name}`;
+        const imageRef = ref(storage, `chatImages/${storageFileName}`);
         await uploadBytes(imageRef, image);
         imageUrl = await getDownloadURL(imageRef);
       }
 
-      await addDoc(collection(db, "messages"), {
+      // Crear el documento del mensaje en Firestore
+      const messageData = {
         from: userData.username,
         to: receiver,
         text: text.trim(),
@@ -218,11 +271,16 @@ export default function MessageHandler({ receiver, isBlocked }) {
         participants: [userData.username, receiver],
         read: false,
         replyTo: replyTo ? { from: replyTo.from, text: replyTo.text } : null
-      });
+      };
 
+      await addDoc(collection(db, "messages"), messageData);
+
+      // Limpiar estado después de enviar
       setText('');
       setImage(null);
       setReplyTo(null);
+      
+      // Forzar scroll al final
       scrollToBottom();
     } catch (error) {
       console.error("Error al enviar mensaje:", error);
@@ -258,9 +316,16 @@ export default function MessageHandler({ receiver, isBlocked }) {
       // Si el mensaje tiene una imagen, eliminarla del storage
       if (imageUrl) {
         try {
-          const imagePath = decodeURIComponent(new URL(imageUrl).pathname.split("/o/")[1]);
-          const imageRef = ref(storage, imagePath);
-          await deleteObject(imageRef);
+          // Verificar si es una URL de GIF externa o una imagen almacenada
+          const isExternalGif = imageUrl.includes("tenor.com") || 
+                              imageUrl.includes("giphy.com") || 
+                              !imageUrl.includes("firebasestorage");
+          
+          if (!isExternalGif) {
+            const imagePath = decodeURIComponent(new URL(imageUrl).pathname.split("/o/")[1]);
+            const imageRef = ref(storage, imagePath);
+            await deleteObject(imageRef);
+          }
         } catch (error) {
           console.error("Error al eliminar imagen:", error);
           // Continuamos con la eliminación del mensaje incluso si falla la eliminación de la imagen
@@ -284,18 +349,24 @@ export default function MessageHandler({ receiver, isBlocked }) {
     }
 
     try {
-      await addDoc(collection(db, "messages"), {
+      // Crear mensaje directamente con la URL del GIF
+      const messageData = {
         from: userData.username,
         to: receiver,
         text: "",
-        image: gifUrl, // Usamos la URL del GIF como imagen
+        image: gifUrl,
         timestamp: serverTimestamp(),
         participants: [userData.username, receiver],
         read: false,
         replyTo: replyTo ? { from: replyTo.from, text: replyTo.text } : null
-      });
+      };
 
+      await addDoc(collection(db, "messages"), messageData);
+      
+      // Limpiar estado de respuesta si hay alguna
       setReplyTo(null);
+      
+      // Forzar scroll al final
       scrollToBottom();
     } catch (error) {
       console.error("Error al enviar GIF:", error);
@@ -311,9 +382,10 @@ export default function MessageHandler({ receiver, isBlocked }) {
 
   // Agrupar mensajes por fecha
   const groupedMessages = messages.reduce((groups, message) => {
-    if (!message.timestamp) return groups;
+    // Usar fecha actual para mensajes sin timestamp (posiblemente en progreso de envío)
+    const messageDate = message.timestamp ? message.timestamp.toDate() : new Date();
+    const date = messageDate.toLocaleDateString();
     
-    const date = message.timestamp.toDate().toLocaleDateString();
     if (!groups[date]) {
       groups[date] = [];
     }
@@ -379,7 +451,7 @@ export default function MessageHandler({ receiver, isBlocked }) {
               {/* Mensajes del día */}
               <div className="space-y-2">
                 {dateMessages.map((message, index) => {
-                  const isMine = message.from === userData.username;
+                  const isMine = message.from === userData?.username;
                   const isFirstInChain = index === 0 || dateMessages[index - 1].from !== message.from;
                   const isLastInChain = index === dateMessages.length - 1 || dateMessages[index + 1].from !== message.from;
                   const photoURL = isMine ? userData?.photoURL : receiverData?.photoURL;
@@ -460,7 +532,7 @@ export default function MessageHandler({ receiver, isBlocked }) {
                         <span className={`block text-[10px] mt-1 text-right opacity-70 ${
                           isMine ? "text-indigo-200" : "text-gray-400"
                         }`}>
-                          {formatTime(message.timestamp)}
+                          {message.timestamp ? formatTime(message.timestamp) : "enviando..."}
                         </span>
                         
                         {/* Acciones en hover */}
