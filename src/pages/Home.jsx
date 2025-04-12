@@ -35,7 +35,7 @@ export default function Home() {
       description: "ahora pueden habilitar las notificaciones!!!",
       features: [
         "Dure probablemente el dia completo el dia de hoy, no tenia conocimiento de electron pero lo logre!",
-        "Como conseguir la aplicacion? aqui, https://github.com/DogitoMB2006/dogito-chatroomeletrcon/releases/download/v1.1.4/Dogito-Chat-Setup-1.1.4.exe",
+        "Como conseguir la aplicacion? aqui, https://github.com/DogitoMB2006/dogito-chatroomeletrcon/releases/download/v1.3.2/Dogito-Chat-Setup-1.3.2.exe",
       ]
     },
     {

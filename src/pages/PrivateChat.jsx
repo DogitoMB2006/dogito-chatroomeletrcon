@@ -143,74 +143,68 @@ export default function PrivateChat() {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100 w-full overflow-hidden">
         {/* Header */}
-        <header className="bg-gray-800 px-2 sm:px-4 py-3 shadow-md flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <button 
-              onClick={goBack}
-              className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700"
-              aria-label="Go back"
-            >
-              <MdArrowBack size={24} />
-            </button>
-            
-            <div className="flex items-center space-x-2">
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-600 flex-shrink-0">
-                  {receiverData?.photoURL ? (
-                    <img src={receiverData.photoURL} alt="avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm text-gray-300">😶</div>
-                  )}
-                </div>
-                {isUserOnline && !isAnyBlockActive && (
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
-                )}
-                {isAnyBlockActive && (
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-800"></div>
-                )}
-              </div>
-              
-              <div>
-                <h2 className="font-medium text-gray-100 truncate max-w-[150px] flex items-center">
-                  {username}
-                  {isBlocked && (
-                    <span className="ml-2 text-xs bg-red-500 text-white px-1 py-0.5 rounded">Bloqueado</span>
-                  )}
-                  {hasBlockedMe && (
-                    <span className="ml-2 text-xs bg-gray-500 text-white px-1 py-0.5 rounded">Te bloqueó</span>
-                  )}
-                </h2>
-                <p className="text-xs text-gray-400">
-                  {isAnyBlockActive ? "Bloqueado" : (isUserOnline ? "En línea" : "Desconectado")}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-1">
-            <button 
-              className={`text-gray-400 p-2 rounded-full ${isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : 'hover:text-white hover:bg-gray-700'} hidden sm:block`}
-              aria-label="Call"
-              disabled={isAnyBlockActive}
-            >
-              <MdCall size={22} />
-            </button>
-            <button 
-              className={`text-gray-400 p-2 rounded-full ${isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : 'hover:text-white hover:bg-gray-700'} hidden sm:block`}
-              aria-label="Video call"
-              disabled={isAnyBlockActive}
-            >
-              <MdVideocam size={22} />
-            </button>
-            <button 
-              onClick={toggleUserInfo}
-              className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700"
-              aria-label="More options"
-            >
-              <MdMoreVert size={22} />
-            </button>
-          </div>
-        </header>
+        <header className="bg-gray-800 px-4 py-4 sm:px-6 sm:py-3 shadow-md flex items-center justify-between">
+  <div className="flex items-center gap-3">
+    <button 
+      onClick={goBack}
+      className="text-white p-2 rounded-full hover:bg-gray-700"
+      aria-label="Go back"
+    >
+      <MdArrowBack size={28} />
+    </button>
+
+    <div className="flex items-center gap-3">
+      <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-600">
+        {receiverData?.photoURL ? (
+          <img src={receiverData.photoURL} alt="avatar" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-base text-gray-300">😶</div>
+        )}
+        {isUserOnline && !isAnyBlockActive && (
+          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-gray-800 rounded-full"></span>
+        )}
+        {isAnyBlockActive && (
+          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-red-500 border-2 border-gray-800 rounded-full"></span>
+        )}
+      </div>
+
+      <div>
+        <h2 className="font-semibold text-base sm:text-lg text-white max-w-[180px] truncate">
+          {username}
+          {isBlocked && (
+            <span className="ml-2 text-xs bg-red-500 text-white px-1 py-0.5 rounded">Bloqueado</span>
+          )}
+          {hasBlockedMe && (
+            <span className="ml-2 text-xs bg-gray-500 text-white px-1 py-0.5 rounded">Te bloqueó</span>
+          )}
+        </h2>
+        <p className="text-xs text-gray-400">{isAnyBlockActive ? "Bloqueado" : (isUserOnline ? "En línea" : "Desconectado")}</p>
+      </div>
+    </div>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <button 
+      className={`text-white p-2 rounded-full ${isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'} hidden sm:block`}
+      disabled={isAnyBlockActive}
+    >
+      <MdCall size={24} />
+    </button>
+    <button 
+      className={`text-white p-2 rounded-full ${isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'} hidden sm:block`}
+      disabled={isAnyBlockActive}
+    >
+      <MdVideocam size={24} />
+    </button>
+    <button 
+      onClick={toggleUserInfo}
+      className="text-white p-2 rounded-full hover:bg-gray-700"
+    >
+      <MdMoreVert size={24} />
+    </button>
+  </div>
+</header>
+
   
         {/* Main Chat Area with Sidebar */}
         <div className="flex flex-1 overflow-hidden relative">
@@ -233,147 +227,140 @@ export default function PrivateChat() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto bg-gray-900 px-1 sm:px-3">
-              <MessageHandler 
-                receiver={username} 
-                isBlocked={isAnyBlockActive} 
-              />
-            </div>
+<div className="flex-1 overflow-y-auto bg-gray-900 px-4 pb-32 pt-2 sm:px-6 sm:pt-4 sm:pb-4">
+
+  <div className="w-full h-full">
+    <MessageHandler 
+      receiver={username} 
+      isBlocked={isAnyBlockActive} 
+    />
+  </div>
+</div>
+
+
           </div>
           
           {/* Mobile User Info Overlay */}
           {showUserInfo && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 md:hidden flex justify-end">
-              <div className="w-4/5 max-w-xs bg-gray-800 h-full overflow-y-auto p-4 animate-slide-in-right">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-medium text-lg">Información de usuario</h3>
-                  <button 
-                    onClick={toggleUserInfo}
-                    className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700"
-                  >
-                    <MdClose size={22} />
-                  </button>
-                </div>
-                
-                {receiverData && (
-                  <div className="space-y-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-600 mb-3">
-                        {receiverData.photoURL ? (
-                          <img src={receiverData.photoURL} alt="avatar" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-2xl text-gray-300">😶</div>
-                        )}
-                      </div>
-                      <h4 className="font-bold text-xl truncate max-w-full">
-                        {username}
-                        {isBlocked && (
-                          <span className="ml-2 text-xs bg-red-500 text-white px-1 py-0.5 rounded">Bloqueado</span>
-                        )}
-                      </h4>
-                      <p className="text-sm text-gray-400">
-                        {isAnyBlockActive ? "Bloqueado" : (isUserOnline ? "En línea" : "Desconectado")}
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-3 text-sm">
-                      <div className="bg-gray-700 p-3 rounded">
-                        <span className="block text-gray-400 mb-1">Correo</span>
-                        <span className="break-words">{receiverData.email || "No disponible"}</span>
-                      </div>
-                      
-                      <div className="bg-gray-700 p-3 rounded">
-                        <span className="block text-gray-400 mb-1">Estado</span>
-                        <span>{receiverData.status || "Sin estado"}</span>
-                      </div>
-                      
-                      <div className="bg-gray-700 p-3 rounded">
-                        <span className="block text-gray-400 mb-1">Se unió</span>
-                        <span>{receiverData.joinDate || "Fecha desconocida"}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-gray-700 flex flex-col space-y-3">
-                      <button 
-                        className={`w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-white transition-colors ${
-                          isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        disabled={isAnyBlockActive}
-                      >
-                        Enviar mensaje
-                      </button>
-                      <BlockUser 
-                        username={username} 
-                        onBlockStatusChange={handleBlockStatusChange} 
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 md:hidden flex justify-end">
+    <div className="w-4/5 max-w-xs bg-gray-800 h-full overflow-y-auto p-4 animate-slide-in-right rounded-l-2xl">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="font-semibold text-lg text-white">Información del usuario</h3>
+        <button 
+          onClick={toggleUserInfo}
+          className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700"
+        >
+          <MdClose size={24} />
+        </button>
+      </div>
+
+      {receiverData && (
+        <div className="space-y-6">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-600 mb-4">
+              {receiverData.photoURL ? (
+                <img src={receiverData.photoURL} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl text-gray-300">😶</div>
+              )}
             </div>
-          )}
+            <h4 className="text-xl font-bold text-white">{username}</h4>
+            <p className="text-sm text-gray-400">
+              {isAnyBlockActive ? "Bloqueado" : (isUserOnline ? "En línea" : "Desconectado")}
+            </p>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <div className="bg-gray-700 p-3 rounded-lg">
+              <p className="text-gray-400 mb-1">Correo</p>
+              <p className="text-white break-words">{receiverData.email || "No disponible"}</p>
+            </div>
+            <div className="bg-gray-700 p-3 rounded-lg">
+              <p className="text-gray-400 mb-1">Estado</p>
+              <p className="text-white">{receiverData.status || "Sin estado"}</p>
+            </div>
+            <div className="bg-gray-700 p-3 rounded-lg">
+              <p className="text-gray-400 mb-1">Se unió</p>
+              <p className="text-white">{receiverData.joinDate || "Fecha desconocida"}</p>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-gray-700 space-y-3">
+            <button 
+              className={`w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white transition-colors ${
+                isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              disabled={isAnyBlockActive}
+            >
+              Enviar mensaje
+            </button>
+            <BlockUser 
+              username={username} 
+              onBlockStatusChange={handleBlockStatusChange} 
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
           
           {/* Desktop sidebar - Only shown on desktop */}
           {showUserInfo && (
-            <div className="w-64 bg-gray-800 shadow-lg border-l border-gray-700 overflow-y-auto hidden md:block p-4 animate-fade-in-down">
-              <h3 className="font-medium text-lg mb-4">Información de usuario</h3>
-              
-              {receiverData && (
-                <div className="space-y-4">
-                  <div className="flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-600 mb-3">
-                      {receiverData.photoURL ? (
-                        <img src={receiverData.photoURL} alt="avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-2xl text-gray-300">😶</div>
-                      )}
-                    </div>
-                    <h4 className="font-bold text-xl">
-                      {username}
-                      {isBlocked && (
-                        <span className="ml-2 text-xs bg-red-500 text-white px-1 py-0.5 rounded">Bloqueado</span>
-                      )}
-                    </h4>
-                    <p className="text-sm text-gray-400">
-                      {isAnyBlockActive ? "Bloqueado" : (isUserOnline ? "En línea" : "Desconectado")}
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-3 text-sm">
-                    <div className="bg-gray-700 p-3 rounded">
-                      <span className="block text-gray-400 mb-1">Correo</span>
-                      <span className="break-words">{receiverData.email || "No disponible"}</span>
-                    </div>
-                    
-                    <div className="bg-gray-700 p-3 rounded">
-                      <span className="block text-gray-400 mb-1">Estado</span>
-                      <span>{receiverData.status || "Sin estado"}</span>
-                    </div>
-                    
-                    <div className="bg-gray-700 p-3 rounded">
-                      <span className="block text-gray-400 mb-1">Se unió</span>
-                      <span>{receiverData.joinDate || "Fecha desconocida"}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="pt-4 border-t border-gray-700 flex flex-col space-y-3">
-                    <button 
-                      className={`w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded text-white transition-colors ${
-                        isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                      disabled={isAnyBlockActive}
-                    >
-                      Enviar mensaje
-                    </button>
-                    <BlockUser 
-                      username={username} 
-                      onBlockStatusChange={handleBlockStatusChange} 
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+  <div className="w-72 bg-gray-800 shadow-lg border-l border-gray-700 overflow-y-auto hidden md:block p-6 animate-fade-in-down">
+    <h3 className="font-semibold text-lg text-white mb-6">Información del usuario</h3>
+
+    {receiverData && (
+      <div className="space-y-6">
+        <div className="flex flex-col items-center text-center">
+          <div className="w-28 h-28 rounded-full overflow-hidden bg-gray-600 mb-4">
+            {receiverData.photoURL ? (
+              <img src={receiverData.photoURL} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-4xl text-gray-300">😶</div>
+            )}
+          </div>
+          <h4 className="text-xl font-bold text-white">{username}</h4>
+          <p className="text-sm text-gray-400">
+            {isAnyBlockActive ? "Bloqueado" : (isUserOnline ? "En línea" : "Desconectado")}
+          </p>
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <div className="bg-gray-700 p-3 rounded-lg">
+            <p className="text-gray-400 mb-1">Correo</p>
+            <p className="text-white break-words">{receiverData.email || "No disponible"}</p>
+          </div>
+          <div className="bg-gray-700 p-3 rounded-lg">
+            <p className="text-gray-400 mb-1">Estado</p>
+            <p className="text-white">{receiverData.status || "Sin estado"}</p>
+          </div>
+          <div className="bg-gray-700 p-3 rounded-lg">
+            <p className="text-gray-400 mb-1">Se unió</p>
+            <p className="text-white">{receiverData.joinDate || "Fecha desconocida"}</p>
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-gray-700 space-y-3">
+          <button 
+            className={`w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white transition-colors ${
+              isAnyBlockActive ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            disabled={isAnyBlockActive}
+          >
+            Enviar mensaje
+          </button>
+          <BlockUser 
+            username={username} 
+            onBlockStatusChange={handleBlockStatusChange} 
+          />
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
         </div>
       </div>
     );

@@ -154,11 +154,14 @@ export default function MessageInput({
   };
 
   return (
-    <form onSubmit={sendMessage} className="border-t border-gray-700 px-3 py-3 bg-gray-800">
+    <form 
+  onSubmit={sendMessage} 
+  className="fixed bottom-0 inset-x-0 z-40 border-t border-gray-700 px-4 py-4 bg-gray-800 sm:static sm:z-auto"
+>
       {image && (
-        <div className="mb-2 bg-gray-750 p-2 rounded text-sm text-gray-300 flex justify-between items-center">
-          <span>
-            Imagen: <strong className="text-gray-200">{image.name}</strong> 
+        <div className="mb-3 bg-gray-700 p-3 rounded-lg text-sm text-gray-200 flex justify-between items-center">
+          <span className="truncate max-w-[80%]">
+            Imagen: <strong>{image.name}</strong> 
             ({Math.round(image.size / 1024)} KB)
           </span>
           <button 
@@ -166,33 +169,34 @@ export default function MessageInput({
             onClick={() => setImage(null)}
             className="text-red-400 hover:text-red-300"
           >
-            <MdDelete />
+            <MdDelete size={18} />
           </button>
         </div>
       )}
-      
-      <div className="flex items-center gap-2 relative">
-        <div className="flex space-x-1">
+  
+      <div className="flex items-center gap-2">
+        {/* Botones laterales */}
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={handleImageClick}
-            className="text-gray-400 hover:text-gray-200 p-2 rounded-full hover:bg-gray-700"
+            className="text-white p-2 rounded-full hover:bg-gray-700 transition"
             title="Adjuntar imagen"
           >
-            <MdImage size={20} />
+            <MdImage size={22} />
           </button>
-
+  
           <EmojiSelector 
             onEmojiClick={handleEmojiClick} 
             buttonRef={emojiButtonRef} 
           />
-
+  
           <GifSelector 
             onGifClick={handleGifClick}
             buttonRef={gifButtonRef}
           />
         </div>
-        
+  
         <input
           type="file"
           ref={fileInputRef}
@@ -200,31 +204,34 @@ export default function MessageInput({
           onChange={handleFileChange}
           className="hidden"
         />
-
+  
+        {/* Input de texto */}
         <input
           type="text"
           ref={textInputRef}
-          placeholder="Envía un mensaje... Usa #home o #chat para navegación"
-          className="flex-1 bg-gray-700 border border-gray-600 rounded-full px-4 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Escribe tu mensaje..."
+          className="flex-1 bg-gray-700 border border-gray-600 rounded-full px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onClick={handleInputClick}
           onKeyUp={handleInputKeyUp}
           onKeyDown={handleKeyDown}
         />
-
+  
+        {/* Botón de enviar */}
         <button
           type="submit"
-          className={`p-2 rounded-full ${
+          className={`p-2 rounded-full transition ${
             text.trim() || image
               ? "bg-indigo-600 hover:bg-indigo-700 text-white" 
               : "bg-gray-700 text-gray-500 cursor-not-allowed"
           }`}
           disabled={!text.trim() && !image}
         >
-          <MdSend size={20} />
+          <MdSend size={22} />
         </button>
       </div>
     </form>
   );
+  
 }
