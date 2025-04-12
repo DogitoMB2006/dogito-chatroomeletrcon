@@ -22,7 +22,7 @@ release/win-unpacked/
 release/Dogito\ Chat\ Setup\ *
 release/win-unpacked/Dogito\ Chat.exe
 release/win-unpacked/resources/app.asar
-
+deploy-linux.sh
 # Vite build output
 /dist
 /dist-ssr
@@ -124,3 +124,4 @@ ui-debug.log
 # Personal workspace/configuration
 .workspace
 .project
+
