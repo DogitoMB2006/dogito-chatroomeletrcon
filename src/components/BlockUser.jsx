@@ -15,7 +15,7 @@ import {
 import { MdBlock, MdRemoveCircle } from "react-icons/md";
 import { toast } from "react-toastify";
 
-export default function BlockUser({ username, onBlockStatusChange, isMobileMenu = false }) {
+export default function BlockUser({ username, onBlockStatusChange }) {
   const { userData } = useContext(AuthContext);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,10 +75,8 @@ export default function BlockUser({ username, onBlockStatusChange, isMobileMenu 
           onBlockStatusChange(true);
         }
         
-        // Si no es un menú móvil, redirigir al usuario a la página de chats
-        if (!isMobileMenu) {
-          navigate("/chat");
-        }
+        // Redirigir al usuario a la página de chats
+        navigate("/chat");
       }
     } catch (error) {
       console.error("Error al bloquear/desbloquear usuario:", error);
@@ -88,52 +86,28 @@ export default function BlockUser({ username, onBlockStatusChange, isMobileMenu 
     }
   };
 
-  // Si es para el menú móvil, devolver un diseño diferente
-  if (isMobileMenu) {
-    return (
-      <button 
-        onClick={handleBlockUser}
-        className={`w-full flex items-center px-4 py-2 text-sm ${isBlocked ? 'text-green-400' : 'text-red-400'} hover:bg-gray-700`}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-current mx-2"></div>
-        ) : isBlocked ? (
-          <MdRemoveCircle size={18} className="mr-2" />
-        ) : (
-          <MdBlock size={18} className="mr-2" />
-        )}
-        {isBlocked ? "Desbloquear usuario" : "Bloquear usuario"}
-      </button>
-    );
-  }
-
-  // Versión estándar para el sidebar o panel de información
   return (
     <button 
       className={`w-full py-2 ${
         isBlocked 
-          ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700" 
-          : "bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700"
+          ? "bg-gray-600 hover:bg-gray-700" 
+          : "bg-red-600 hover:bg-red-700"
       } rounded text-white transition-colors flex items-center justify-center space-x-2`}
       onClick={handleBlockUser}
       disabled={isLoading}
     >
       {isLoading ? (
-        <div className="flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-          <span>Procesando...</span>
-        </div>
+        <span>Procesando...</span>
       ) : (
         <>
           {isBlocked ? (
             <>
-              <MdRemoveCircle size={18} />
+              <MdRemoveCircle size={20} />
               <span>Desbloquear usuario</span>
             </>
           ) : (
             <>
-              <MdBlock size={18} />
+              <MdBlock size={20} />
               <span>Bloquear usuario</span>
             </>
           )}
