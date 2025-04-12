@@ -20,7 +20,21 @@ import AddFriend from "../components/AddFriend";
 import FriendRequests from "../components/FriendRequests";
 import CreateGroupButton from "../components/CreateGroupButton";
 import Staff from "../components/Staff";
-import { MdSearch, MdPeopleAlt, MdGroups, MdNotifications } from "react-icons/md";
+import { 
+  MdSearch, 
+  MdPeopleAlt, 
+  MdGroups, 
+  MdNotifications,
+  MdChat,
+  MdMoreVert,
+  MdClose,
+  MdFilterList,
+  MdCheckCircle,
+  MdAutorenew,
+  MdRefresh,
+  MdPersonAdd,
+  MdAdd
+} from "react-icons/md";
 import { listenToUserStatus } from "../utils/onlineStatus";
 
 export default function Chats() {
@@ -36,15 +50,33 @@ export default function Chats() {
   const [onlineStatuses, setOnlineStatuses] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [sortOrder, setSortOrder] = useState("recent"); // "recent", "unread", "alphabetical"
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const navigate = useNavigate();
   const navigationTimeoutRef = useRef(null);
   const clickedItemRef = useRef(null);
+  const filterMenuRef = useRef(null);
   
   // Referencia para evitar duplicación en las actualizaciones de contadores
   const processedMessagesRef = useRef(new Set());
   const unreadCountsTimerRef = useRef(null);
   // Referencia para el último userData recibido
   const lastUserDataRef = useRef(null);
+
+  // Cierre del menú de filtros al hacer clic fuera de él
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
+        setShowFilterMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Optimización: Función de navegación mejorada con protección contra doble clic
   const handleNavigation = useCallback((path, id) => {
@@ -68,12 +100,14 @@ export default function Chats() {
       clickedItemRef.current.classList.add('bg-indigo-700');
     }
     
-    // Ejecutar la navegación con un pequeño retraso para la transición visua
+    // Ejecutar la navegación con un pequeño retraso para la transición visual
     clearTimeout(navigationTimeoutRef.current);
     navigationTimeoutRef.current = setTimeout(() => {
       navigate(path);
       // Restablecer el estado después de la navegación
       setIsNavigating(false);
+      // Cerrar el menú móvil si está abierto
+      setShowMobileMenu(false);
       // Limpiar el estilo después de la navegación
       if (clickedItemRef.current) {
         clickedItemRef.current.classList.remove('bg-indigo-700');
@@ -389,7 +423,7 @@ export default function Chats() {
     const diffInDays = Math.floor(diffInHours / 24);
     
     if (diffInMinutes < 1) return "ahora";
-    else if (diffInMinutes < 60) return `hace ${diffInMinutes} min`;
+    else if (diffInMinutes < 60) return `${diffInMinutes} min`;
     else if (diffInHours < 24 && messageDate.getDate() === now.getDate()) {
       return messageDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     }
@@ -455,290 +489,589 @@ export default function Chats() {
     }
   };
 
-  // Ordenar la lista de amigos según la actividad reciente
+  // Ordenar la lista de amigos según diferentes criterios
   const sortedFriends = useMemo(() => {
-    return [...filteredFriends].sort((a, b) => {
-      const lastMsgA = lastMessages[a.username];
-      const lastMsgB = lastMessages[b.username];
-      
-      // Si hay mensajes no leídos, priorizarlos
-      const unreadA = unreadCounts[a.username] || 0;
-      const unreadB = unreadCounts[b.username] || 0;
-      
-      if (unreadA > 0 && unreadB === 0) return -1;
-      if (unreadA === 0 && unreadB > 0) return 1;
-      
-      // Si ambos tienen mensajes no leídos o ninguno, comparar por tiempo
-      if (!lastMsgA?.timestamp && !lastMsgB?.timestamp) return 0;
-      if (!lastMsgA?.timestamp) return 1;
-      if (!lastMsgB?.timestamp) return -1;
-      
-      // Ordenar por timestamp más reciente
-      return lastMsgB.timestamp.toDate() - lastMsgA.timestamp.toDate();
-    });
-  }, [filteredFriends, lastMessages, unreadCounts]);
+    let sorted = [...filteredFriends];
+    
+    if (sortOrder === "recent") {
+      // Ordenar por mensajes más recientes primero
+      sorted.sort((a, b) => {
+        const lastMsgA = lastMessages[a.username];
+        const lastMsgB = lastMessages[b.username];
+        
+        // Primero priorizamos los no leídos
+        const unreadA = unreadCounts[a.username] || 0;
+        const unreadB = unreadCounts[b.username] || 0;
+        
+        if (unreadA > 0 && unreadB === 0) return -1;
+        if (unreadA === 0 && unreadB > 0) return 1;
+        
+        // Si ambos tienen o no tienen no leídos, ordenar por timestamp
+        if (!lastMsgA?.timestamp && !lastMsgB?.timestamp) return 0;
+        if (!lastMsgA?.timestamp) return 1;
+        if (!lastMsgB?.timestamp) return -1;
+        
+        return lastMsgB.timestamp.toDate() - lastMsgA.timestamp.toDate();
+      });
+    } else if (sortOrder === "unread") {
+      // Ordenar por cantidad de mensajes no leídos
+      sorted.sort((a, b) => {
+        const unreadA = unreadCounts[a.username] || 0;
+        const unreadB = unreadCounts[b.username] || 0;
+        
+        if (unreadA !== unreadB) {
+          return unreadB - unreadA; // Mayor número de no leídos primero
+        }
+        
+        // Si tienen mismo número de no leídos, ordenar por recientes
+        const lastMsgA = lastMessages[a.username];
+        const lastMsgB = lastMessages[b.username];
+        
+        if (!lastMsgA?.timestamp && !lastMsgB?.timestamp) return 0;
+        if (!lastMsgA?.timestamp) return 1;
+        if (!lastMsgB?.timestamp) return -1;
+        
+        return lastMsgB.timestamp.toDate() - lastMsgA.timestamp.toDate();
+      });
+    } else if (sortOrder === "alphabetical") {
+      // Ordenar alfabéticamente
+      sorted.sort((a, b) => a.username.localeCompare(b.username));
+    } else if (sortOrder === "online") {
+      // Ordenar por estado en línea
+      sorted.sort((a, b) => {
+        const isOnlineA = isOnline(a.username);
+        const isOnlineB = isOnline(b.username);
+        
+        if (isOnlineA && !isOnlineB) return -1;
+        if (!isOnlineA && isOnlineB) return 1;
+        
+        return 0;
+      });
+    }
+    
+    return sorted;
+  }, [filteredFriends, lastMessages, unreadCounts, sortOrder, onlineStatuses]);
+
+  // Lo mismo para grupos
+  const sortedGroups = useMemo(() => {
+    let sorted = [...filteredGroups];
+    
+    if (sortOrder === "recent" || sortOrder === "unread") {
+      // Ordenar por actividad reciente
+      sorted.sort((a, b) => {
+        const lastMsgA = lastMessages[`group_${a.id}`];
+        const lastMsgB = lastMessages[`group_${b.id}`];
+        
+        if (!lastMsgA?.timestamp && !lastMsgB?.timestamp) return 0;
+        if (!lastMsgA?.timestamp) return 1;
+        if (!lastMsgB?.timestamp) return -1;
+        
+        return lastMsgB.timestamp.toDate() - lastMsgA.timestamp.toDate();
+      });
+    } else if (sortOrder === "alphabetical") {
+      // Ordenar alfabéticamente
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    return sorted;
+  }, [filteredGroups, lastMessages, sortOrder]);
+
+  // Variable para saber si mostrar pantalla vacía o no
+  const shouldShowEmptyState = (selectedTab === "friends" && filteredFriends.length === 0) || 
+                            (selectedTab === "groups" && filteredGroups.length === 0);
+
+  // Limpiar búsqueda
+  const clearSearch = () => {
+    setSearchTerm("");
+  };
+
+  // Refrescar amigos manualmente
+  const refreshFriends = () => {
+    // Limpiar caché de amigos
+    sessionStorage.removeItem('friends_data');
+    sessionStorage.removeItem('friends_timestamp');
+    
+    // Forzar recarga
+    fetchFriends();
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-gray-100">
-      {/* Barra de búsqueda */}
-      <div className="p-4 border-b border-gray-800">
-        <div className="relative">
-          <MdSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar conversaciones..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-gray-700 text-gray-100 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+      {/* Header con título y acciones principales */}
+      <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-800 shadow-md">
+        <div className="px-4 py-3 flex justify-between items-center">
+          <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+            {selectedTab === "friends" ? "Conversaciones" : "Grupos"}
+          </h1>
+          
+          <div className="flex items-center space-x-2">
+            {/* Acciones del encabezado: mostrar más en pantallas grandes */}
+            <div className="hidden md:flex items-center space-x-2">
+              <button 
+                onClick={refreshFriends}
+                className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full"
+                title="Refrescar"
+              >
+                <MdRefresh size={20} />
+              </button>
+              
+              {selectedTab === "friends" ? (
+                <AddFriend className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full" />
+              ) : (
+                <CreateGroupButton className="p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full" />
+              )}
+              
+              {pendingFriendRequests.length > 0 && (
+                <button
+                  onClick={() => setShowFriendRequestsModal(true)}
+                  className="relative p-2 text-indigo-400 hover:text-indigo-300 bg-gray-800 rounded-full"
+                  title="Solicitudes de amistad"
+                >
+                  <MdNotifications size={20} />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full h-5 w-5 flex items-center justify-center">
+                    {pendingFriendRequests.length}
+                  </span>
+                </button>
+              )}
+            </div>
+            
+            {/* Botón de menú móvil */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden p-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full relative"
+            >
+              {pendingFriendRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full h-4 w-4 flex items-center justify-center">
+                  {pendingFriendRequests.length}
+                </span>
+              )}
+              <MdMoreVert size={20} />
+            </button>
+          </div>
         </div>
+        
+        {/* Barra de búsqueda y filtros */}
+        <div className="px-4 py-2 flex items-center space-x-2">
+          <div className="relative flex-1">
+            <MdSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder={`Buscar ${selectedTab === "friends" ? "conversaciones" : "grupos"}...`}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-gray-800 text-gray-100 border border-gray-700 rounded-full py-2 pl-10 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+            {searchTerm && (
+              <button 
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                onClick={clearSearch}
+              >
+                <MdClose size={18} />
+              </button>
+            )}
+          </div>
+          
+          {/* Botón de filtro */}
+          <div className="relative" ref={filterMenuRef}>
+            <button
+              onClick={() => setShowFilterMenu(!showFilterMenu)}
+              className="p-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-gray-100 rounded-full"
+              title="Ordenar"
+            >
+              <MdFilterList size={20} />
+            </button>
+            
+            {/* Menú de filtro */}
+            {showFilterMenu && (
+              <div className="absolute right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-30 py-1 overflow-hidden animate-fade-in-down">
+                <button
+                  onClick={() => {
+                    setSortOrder("recent");
+                    setShowFilterMenu(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 flex items-center ${sortOrder === "recent" ? "text-indigo-400" : "text-gray-300"}`}
+                >
+                  {sortOrder === "recent" && <MdCheckCircle className="mr-2" size={16} />}
+                  <span className={sortOrder === "recent" ? "ml-5" : "ml-7"}>Recientes</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSortOrder("unread");
+                    setShowFilterMenu(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 flex items-center ${sortOrder === "unread" ? "text-indigo-400" : "text-gray-300"}`}
+                >
+                  {sortOrder === "unread" && <MdCheckCircle className="mr-2" size={16} />}
+                  <span className={sortOrder === "unread" ? "ml-5" : "ml-7"}>No leídos</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSortOrder("alphabetical");
+                    setShowFilterMenu(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 flex items-center ${sortOrder === "alphabetical" ? "text-indigo-400" : "text-gray-300"}`}
+                >
+                  {sortOrder === "alphabetical" && <MdCheckCircle className="mr-2" size={16} />}
+                  <span className={sortOrder === "alphabetical" ? "ml-5" : "ml-7"}>Alfabético</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSortOrder("online");
+                    setShowFilterMenu(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 flex items-center ${sortOrder === "online" ? "text-indigo-400" : "text-gray-300"}`}
+                >
+                  {sortOrder === "online" && <MdCheckCircle className="mr-2" size={16} />}
+                  <span className={sortOrder === "online" ? "ml-5" : "ml-7"}>En línea</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Menú móvil expandible con acciones */}
+        {showMobileMenu && (
+          <div className="md:hidden bg-gray-800 py-2 px-3 transition-all animate-fade-in-down border-t border-gray-700">
+            <div className="grid grid-cols-3 gap-2">
+              <button 
+                onClick={() => {
+                  setShowFriendRequestsModal(true);
+                  setShowMobileMenu(false);
+                }}
+                className="flex flex-col items-center p-2 rounded bg-gray-750 hover:bg-gray-700 relative"
+              >
+                <MdNotifications size={20} className="text-indigo-400 mb-1" />
+                <span className="text-xs text-gray-300">Solicitudes</span>
+                {pendingFriendRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full h-5 w-5 flex items-center justify-center">
+                    {pendingFriendRequests.length}
+                  </span>
+                )}
+              </button>
+              
+              <button 
+                onClick={refreshFriends}
+                className="flex flex-col items-center p-2 rounded bg-gray-750 hover:bg-gray-700"
+              >
+                <MdRefresh size={20} className="text-gray-400 mb-1" />
+                <span className="text-xs text-gray-300">Refrescar</span>
+              </button>
+              
+              {selectedTab === "friends" ? (
+                <button 
+                  onClick={() => {
+                    const addFriendButton = document.querySelector('[data-add-friend-button]');
+                    if (addFriendButton) {
+                      addFriendButton.click();
+                    }
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex flex-col items-center p-2 rounded bg-gray-750 hover:bg-gray-700"
+                >
+                  <MdPersonAdd size={20} className="text-indigo-400 mb-1" />
+                  <span className="text-xs text-gray-300">Agregar amigo</span>
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    const createGroupButton = document.querySelector('[data-create-group-button]');
+                    if (createGroupButton) {
+                      createGroupButton.click();
+                    }
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex flex-col items-center p-2 rounded bg-gray-750 hover:bg-gray-700"
+                >
+                  <MdAdd size={20} className="text-indigo-400 mb-1" />
+                  <span className="text-xs text-gray-300">Crear grupo</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Pestañas de navegación */}
-      <div className="flex border-b border-gray-800">
+      <div className="flex border-b border-gray-800 sticky top-[110px] z-10 bg-gray-900 shadow-sm">
         <button
           onClick={() => setSelectedTab("friends")}
           className={`flex-1 py-3 flex justify-center items-center gap-2 ${
-            selectedTab === "friends" ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400'
-          }`}
+            selectedTab === "friends" ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400 hover:text-gray-300'
+          } transition-colors duration-200`}
         >
           <MdPeopleAlt size={20} />
-          <span>Amigos</span>
+          <span className="font-medium">Amigos</span>
         </button>
         <button
           onClick={() => setSelectedTab("groups")}
           className={`flex-1 py-3 flex justify-center items-center gap-2 ${
-            selectedTab === "groups" ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400'
-          }`}
+            selectedTab === "groups" ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400 hover:text-gray-300'
+          } transition-colors duration-200`}
         >
           <MdGroups size={20} />
-          <span>Grupos</span>
+          <span className="font-medium">Grupos</span>
         </button>
       </div>
 
-      {/* Contenido: Lista de chats */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Contenido: Lista de chats con estado de carga */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-900">
         {isLoading ? (
-          <div className="flex justify-center items-center h-full">
-            <div className="animate-pulse text-gray-400">Cargando...</div>
+          <div className="flex flex-col items-center justify-center h-full py-10 px-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
+            <p className="text-gray-400 text-center">Cargando tus {selectedTab === "friends" ? "conversaciones" : "grupos"}...</p>
+          </div>
+        ) : shouldShowEmptyState ? (
+          <div className="flex flex-col items-center justify-center h-full py-20 px-4">
+            {selectedTab === "friends" ? (
+              <>
+                <div className="bg-gray-800 rounded-full p-6 mb-4">
+                  <MdPeopleAlt className="text-indigo-400" size={40} />
+                </div>
+                <h3 className="text-xl font-bold mb-2 text-gray-200">No hay amigos para mostrar</h3>
+                <p className="text-gray-400 text-center max-w-md mb-6">Agrega amigos para comenzar a chatear y mantenerte en contacto.</p>
+                <AddFriend data-add-friend-button />
+              </>
+            ) : (
+              <>
+                <div className="bg-gray-800 rounded-full p-6 mb-4">
+                  <MdGroups className="text-indigo-400" size={40} />
+                </div>
+                <h3 className="text-xl font-bold mb-2 text-gray-200">No hay grupos para mostrar</h3>
+                <p className="text-gray-400 text-center max-w-md mb-6">Crea un grupo para chatear con varios amigos a la vez.</p>
+                <CreateGroupButton data-create-group-button />
+              </>
+            )}
           </div>
         ) : (
-          <>
+          <div className="p-2 space-y-1">
+            {/* Lista de amigos */}
             {selectedTab === "friends" && (
-              <div className="p-2 space-y-1">
-                {sortedFriends.length > 0 ? (
-                  sortedFriends.map((friend) => (
-                    <div
-                      id={`friend-${friend.username}`}
-                      key={friend.username}
-                      onClick={() => handleNavigation(`/chat/${friend.username}`, `friend-${friend.username}`)}
-                      className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition-colors active:bg-indigo-700
-                        ${unreadCounts[friend.username] ? 'bg-gray-800 bg-opacity-70' : ''}
-                      `}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          handleNavigation(`/chat/${friend.username}`, `friend-${friend.username}`);
-                        }
-                      }}
-                    >
-                      <div className="relative">
-                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
-                          {friend.photoURL ? (
-                            <img src={friend.photoURL} alt="avatar" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-sm text-gray-300">😶</div>
-                          )}
-                        </div>
-                        {isOnline(friend.username) && (
-                          <div className="absolute bottom-0 right-0 bg-green-500 w-3 h-3 rounded-full border-2 border-gray-900"></div>
+              sortedFriends.map((friend) => (
+                <div
+                  id={`friend-${friend.username}`}
+                  key={friend.username}
+                  onClick={() => handleNavigation(`/chat/${friend.username}`, `friend-${friend.username}`)}
+                  className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition-colors active:bg-indigo-700
+                    ${unreadCounts[friend.username] ? 'bg-gray-800 bg-opacity-70' : ''}
+                  `}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleNavigation(`/chat/${friend.username}`, `friend-${friend.username}`);
+                    }
+                  }}
+                >
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                      {friend.photoURL ? (
+                        <img src={friend.photoURL} alt="avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-sm text-gray-300">😶</div>
+                      )}
+                    </div>
+                    {isOnline(friend.username) ? (
+                      <div className="absolute bottom-0 right-0 bg-green-500 w-3.5 h-3.5 rounded-full border-2 border-gray-900"></div>
+                    ) : (
+                      <div className="absolute bottom-0 right-0 bg-gray-500 w-3.5 h-3.5 rounded-full border-2 border-gray-900"></div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center">
+                        <span className={`font-medium truncate ${unreadCounts[friend.username] ? 'text-white' : 'text-gray-200'}`}>
+                          {friend.username}
+                        </span>
+                        <Staff username={friend.username} />
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {lastMessages[friend.username]?.timestamp ? 
+                          formatRelativeTime(lastMessages[friend.username].timestamp) : ''}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <p className={`text-sm truncate max-w-[70%] ${
+                        lastMessages[friend.username]?.unread ? 'text-gray-100 font-medium' : 'text-gray-400'
+                      }`}>
+                        {lastMessages[friend.username]?.from === userData.username && (
+                          <span className="text-gray-400 mr-1">Tú:</span>
                         )}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center">
-                            <span className="font-medium truncate">{friend.username}</span>
-                            <Staff username={friend.username} />
-                          </div>
-                          <span className="text-xs text-gray-400">
-                            {lastMessages[friend.username]?.timestamp ? 
-                              formatRelativeTime(lastMessages[friend.username].timestamp) : ''}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center mt-1">
-                          <p className={`text-sm truncate max-w-[70%] ${
-                            lastMessages[friend.username]?.unread ? 'text-gray-100 font-medium' : 'text-gray-400'
-                          }`}>
-                            {lastMessages[friend.username]?.from === userData.username && (
-                              <span className="text-gray-400 mr-1">Tú:</span>
-                            )}
-                            {lastMessages[friend.username]?.text || 'No hay mensajes aún'}
-                          </p>
-                          {unreadCounts[friend.username] > 0 && (
-                            <span className="bg-indigo-600 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
-                              {unreadCounts[friend.username]}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                        {lastMessages[friend.username]?.text || 'No hay mensajes aún'}
+                      </p>
+                      {unreadCounts[friend.username] > 0 && (
+                        <span className="bg-indigo-600 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                          {unreadCounts[friend.username]}
+                        </span>
+                      )}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-10 text-gray-500">
-                    <p className="mb-4">No hay amigos para mostrar</p>
-                    <AddFriend />
                   </div>
-                )}
-              </div>
+                </div>
+              ))
             )}
-     
+            
+            {/* Lista de grupos */}
             {selectedTab === "groups" && (
-              <div className="p-2 space-y-1">
-                {filteredGroups.length > 0 ? (
-                  filteredGroups.map((group) => (
-                    <div
-                      id={`group-${group.id}`}
-                      key={group.id}
-                      onClick={() => handleNavigation(`/chat/group/${group.id}`, `group-${group.id}`)}
-                      className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition-colors active:bg-indigo-700
-                        ${lastMessages[`group_${group.id}`]?.unread ? 'bg-gray-800 bg-opacity-70' : ''}
-                      `}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          handleNavigation(`/chat/group/${group.id}`, `group-${group.id}`);
-                        }
-                      }}
-                    >
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 flex items-center justify-center">
-                        <span className="text-xl">👥</span>
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium truncate">{group.name}</span>
-                          <span className="text-xs text-gray-400">
-                            {lastMessages[`group_${group.id}`]?.timestamp ? 
-                              formatRelativeTime(lastMessages[`group_${group.id}`].timestamp) : ''}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center mt-1">
-                          <p className={`text-sm truncate max-w-[70%] ${
-                            lastMessages[`group_${group.id}`]?.unread ? 'text-gray-100 font-medium' : 'text-gray-400'
-                          }`}>
-                            {lastMessages[`group_${group.id}`]?.from ? (
-                              <span>
-                                {lastMessages[`group_${group.id}`].from === userData.username ? (
-                                  <span className="text-gray-400 mr-1">Tú:</span>
-                                ) : (
-                                  <span className="font-medium mr-1">{lastMessages[`group_${group.id}`].from}:</span>
-                                )}
-                                {lastMessages[`group_${group.id}`].text}
-                              </span>
-                            ) : (
-                              'No hay mensajes aún'
-                            )}
-                          </p>
-                          {lastMessages[`group_${group.id}`]?.unread && (
-                            <span className="bg-indigo-600 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
-                              nuevo
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-10 text-gray-500">
-                    <p className="mb-4">No hay grupos para mostrar</p>
-                    <CreateGroupButton />
+              sortedGroups.map((group) => (
+                <div
+                  id={`group-${group.id}`}
+                  key={group.id}
+                  onClick={() => handleNavigation(`/chat/group/${group.id}`, `group-${group.id}`)}
+                  className={`flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition-colors active:bg-indigo-700
+                    ${lastMessages[`group_${group.id}`]?.unread ? 'bg-gray-800 bg-opacity-70' : ''}
+                  `}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleNavigation(`/chat/group/${group.id}`, `group-${group.id}`);
+                    }
+                  }}
+                >
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 flex items-center justify-center">
+                    <span className="text-xl">👥</span>
                   </div>
-                )}
-              </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center">
+                      <span className={`font-medium truncate ${lastMessages[`group_${group.id}`]?.unread ? 'text-white' : 'text-gray-200'}`}>
+                        {group.name}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {lastMessages[`group_${group.id}`]?.timestamp ? 
+                          formatRelativeTime(lastMessages[`group_${group.id}`].timestamp) : ''}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <p className={`text-sm truncate max-w-[70%] ${
+                        lastMessages[`group_${group.id}`]?.unread ? 'text-gray-100 font-medium' : 'text-gray-400'
+                      }`}>
+                        {lastMessages[`group_${group.id}`]?.from ? (
+                          <span>
+                            {lastMessages[`group_${group.id}`].from === userData.username ? (
+                              <span className="text-gray-400 mr-1">Tú:</span>
+                            ) : (
+                              <span className="font-medium mr-1">{lastMessages[`group_${group.id}`].from}:</span>
+                            )}
+                            {lastMessages[`group_${group.id}`].text}
+                          </span>
+                        ) : (
+                          'No hay mensajes aún'
+                        )}
+                      </p>
+                      {lastMessages[`group_${group.id}`]?.unread && (
+                        <span className="bg-indigo-600 text-white text-xs rounded-full px-1.5 py-0.5">
+                          nuevo
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
-          </>
+            
+            {/* Espacio extra al final para evitar que el botón flotante tape el último elemento */}
+            <div className="h-16"></div>
+          </div>
         )}
       </div>
 
-      {/* Botones flotantes */}
+      {/* Botones flotantes (versión mejorada) */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-3">
-        {/* Solicitudes de amistad */}
-        <button
-          onClick={() => setShowFriendRequestsModal(true)}
-          className="relative bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg rounded-full p-3"
-          title="Solicitudes de amistad"
-        >
-          <MdNotifications size={20} />
-          {pendingFriendRequests.length > 0 && (
+        {/* Mostrar un indicador de solicitudes de amistad pendientes flotante */}
+        {pendingFriendRequests.length > 0 && (
+          <button
+            onClick={() => setShowFriendRequestsModal(true)}
+            className="relative bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg rounded-full p-3"
+            title="Solicitudes de amistad"
+          >
+            <MdNotifications size={20} />
             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
               {pendingFriendRequests.length}
             </span>
-          )}
-        </button>
-        
-        {selectedTab === "friends" && (
-          <AddFriend className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg rounded-full p-3" />
+          </button>
         )}
-        {selectedTab === "groups" && (
-          <CreateGroupButton className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg rounded-full p-3" />
+        
+        {/* Botón para agregar amigo o crear grupo según el tab */}
+        {selectedTab === "friends" ? (
+          <AddFriend 
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg rounded-full p-3" 
+            data-add-friend-button
+          />
+        ) : (
+          <CreateGroupButton 
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg rounded-full p-3" 
+            data-create-group-button
+          />
         )}
       </div>
 
       {/* Modal de solicitudes de amistad */}
       {showFriendRequestsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-gray-800 border border-gray-700 p-6 rounded-lg w-full max-w-md shadow-lg">
-            <h2 className="text-xl font-bold mb-4 text-gray-100">Solicitudes de amistad</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg w-full max-w-md shadow-lg overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+              <h2 className="text-xl font-bold flex items-center">
+                <MdNotifications className="mr-2" size={22} />
+                Solicitudes de amistad
+              </h2>
+            </div>
 
-            {pendingFriendRequests.length === 0 ? (
-              <p className="text-center text-gray-400">No tienes solicitudes pendientes.</p>
-            ) : (
-              <ul className="space-y-3">
-                {pendingFriendRequests.map((req) => (
-                  <li
-                    key={req.id}
-                    className="flex items-center gap-3 bg-gray-700 p-3 rounded"
-                  >
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-600 flex-shrink-0">
-                      {req.photoURL ? (
-                        <img src={req.photoURL} alt="avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-sm text-gray-300">😶</div>
-                      )}
-                    </div>
-                  
-                    <div className="flex justify-between items-center w-full">
-                      <span className="text-gray-200">{req.from}</span>
-                      <div className="space-x-2">
+            <div className="p-4">
+              {pendingFriendRequests.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 flex flex-col items-center">
+                  <MdPeopleAlt size={40} className="mb-3 text-gray-600" />
+                  <p>No tienes solicitudes pendientes.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                  {pendingFriendRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="flex items-center gap-3 bg-gray-750 p-3 rounded-lg border border-gray-700"
+                    >
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                        {req.photoURL ? (
+                          <img src={req.photoURL} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-sm text-gray-300">😶</div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-200 truncate">{req.from}</p>
+                        <p className="text-xs text-gray-400">
+                          {req.timestamp ? formatRelativeTime(req.timestamp.toDate()) : 'Hace un momento'}
+                        </p>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <button
                           onClick={() => handleAcceptFriendRequest(req)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-sm"
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-sm transition-colors"
                         >
                           Aceptar
                         </button>
                         <button
                           onClick={() => handleRejectFriendRequest(req)}
-                          className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm"
+                          className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded text-sm transition-colors"
                         >
                           Rechazar
                         </button>
                       </div>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  ))}
+                </div>
+              )}
 
-            <div className="text-right mt-4">
-              <button
-                onClick={() => setShowFriendRequestsModal(false)}
-                className="text-gray-400 hover:text-gray-300"
-              >
-                Cerrar
-              </button>
+              <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end">
+                <button
+                  onClick={() => setShowFriendRequestsModal(false)}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         </div>
